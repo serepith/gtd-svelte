@@ -1,0 +1,27 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "Server",
+			"request": "launch",
+			"runtimeArgs": ["run", "dev", "--", "--open"],
+			"skipFiles": ["<node_internals>/**"],
+      "runtimeExecutable": "npm",
+			"type": "node",
+			"console": "internalConsole"
+		},
+		{
+			"name": "Client",
+			"type": "chrome",
+			"request": "launch",
+			"url": "http://127.0.0.1:5173",
+			"webRoot": "${workspaceFolder}"
+		}
+	],
+	"compounds": [
+		{
+			"name": "Server/Client",
+			"configurations": ["Server", "Client"]
+		}
+	]
+}
