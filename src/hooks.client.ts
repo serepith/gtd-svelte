@@ -4,5 +4,5 @@ import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
 export async function init() {
-  initFirebase();
+	initFirebase();
 }

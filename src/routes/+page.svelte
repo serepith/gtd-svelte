@@ -1,5 +1,5 @@
 <script lang="ts">
-  import TaskInputForm from './TaskInputForm.svelte';
+	import TaskInputForm from './TaskInputForm.svelte';
 
 	import welcome from '$lib/images/svelte-welcome.webp';
 	import welcomeFallback from '$lib/images/svelte-welcome.png';
@@ -10,21 +10,19 @@
 
 	$effect(() => {
 		$inspect(firebase, 'firebase');
-	})
+	});
 
 	// Handle login
 	async function handleLogin(event: Event) {
-		if(firebase.auth) {
+		if (firebase.auth) {
 			const provider = new GoogleAuthProvider();
 			const userCredential = await signInWithPopup(firebase.auth, provider);
 			console.log('User logged in:', firebase.user);
-		}
-		else {
+		} else {
 			console.error('Firebase Auth not initialized');
-			console.log(firebase, firebase.auth)
+			console.log(firebase, firebase.auth);
 		}
 	}
-
 </script>
 
 <svelte:head>
@@ -33,14 +31,15 @@
 </svelte:head>
 
 <section>
-	<div class="grid grid-cols-1 gap-4">
-		<TaskInputForm></TaskInputForm>	
+	<div class="grid grid-cols-1 gap-4 flex-1 items-center justify-items-center-safe" style="min-width: 25%;">
+		<TaskInputForm></TaskInputForm>
 
 		{#if !firebase.user}
-			<button class="btn btn-soft btn-lg justify-self-start" onclick={(e) => handleLogin(e)}>Login</button>
+			<button class="btn btn-soft btn-lg min-w-sm" onclick={(e) => handleLogin(e)}
+				>Login</button
+			>
 		{/if}
 	</div>
-	
 </section>
 
 <style>

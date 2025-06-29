@@ -14,22 +14,22 @@ declare global {
 		name: string;
 		createdAt: Timestamp;
 		updatedAt: Timestamp;
-		completed: boolean = false;
-		archived: boolean = false;
-	}
+		completed: boolean;
+		archived: boolean;
+	};
 	type Tag = {
 		id?: string;
 		name: string;
 		createdAt: Timestamp;
 		updatedAt: Timestamp;
-	}
+	};
 	type GraphNode = Task | Tag;
 	interface Junction {
 		parentId: string;
 		childId: string;
+		type: 'task-tag' | 'tag-task' | 'task-task' | 'tag-tag';
 		createdAt: Timestamp;
 	}
 }
-
 
 export {};

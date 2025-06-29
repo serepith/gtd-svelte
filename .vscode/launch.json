@@ -6,7 +6,7 @@
 			"request": "launch",
 			"runtimeArgs": ["run", "dev", "--", "--open"],
 			"skipFiles": ["<node_internals>/**"],
-      "runtimeExecutable": "npm",
+			"runtimeExecutable": "npm",
 			"type": "node",
 			"console": "internalConsole"
 		},
