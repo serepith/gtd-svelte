@@ -1,13 +1,13 @@
 import { initializeApp, type FirebaseApp } from 'firebase/app';
 import { getAuth, type Auth, type User } from 'firebase/auth';
 import {
-	CACHE_SIZE_UNLIMITED,
+	// CACHE_SIZE_UNLIMITED,
 	collection,
 	CollectionReference,
 	getFirestore,
 	onSnapshot,
-	persistentLocalCache,
-	persistentMultipleTabManager,
+	// persistentLocalCache,
+	// persistentMultipleTabManager,
 	QueryDocumentSnapshot,
 	Timestamp,
 	type DocumentData,
@@ -29,14 +29,13 @@ let nodesCollection = $derived(
 		? collection(firebase.db, 'users', firebase.user?.uid, 'nodes')
 		: null
 );
-
 let junctionsCollection = $derived(
 	firebase.user && firebase.db
 		? collection(firebase.db, 'users', firebase.user?.uid, 'junctions')
 		: null
 );
 
-let items = $state({ nodes: [] as GraphNode[], junctions: [] as Junction[] });
+let collections = $state({ nodes: [] as GraphNode[], junctions: [] as Junction[] });
 
 let unsubscribe = $state<null | (() => void)>(null);
 
@@ -51,7 +50,8 @@ const getJunctionsCollection = () => {
   return null;
 };
 
-export { firebase, items, getNodesCollection, getJunctionsCollection };
+export { firebase, collections, getNodesCollection, getJunctionsCollection, 
+  taskConverter, tagConverter, graphNodeConverter };
 
 // pull config from environment variables
 const firebaseConfig = {
@@ -61,16 +61,15 @@ const firebaseConfig = {
 	storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
 	messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
 	appId: import.meta.env.VITE_FIREBASE_APP_ID,
-	experimentalForceLongPolling: true,
 	ignoreUndefinedProperties: true,
-	localCache: persistentLocalCache({
-		tabManager: persistentMultipleTabManager()
-	}),
-	persistence: true,
-	persistenceSettings: {
-		synchronizeTabs: true,
-		cacheSizeBytes: CACHE_SIZE_UNLIMITED
-	}
+	// localCache: persistentLocalCache({
+	// 	tabManager: persistentMultipleTabManager()
+	// }),
+	// persistence: true,
+	// persistenceSettings: {
+	// 	synchronizeTabs: true,
+	// 	cacheSizeBytes: CACHE_SIZE_UNLIMITED
+	// }
 };
 
 const taskConverter: FirestoreDataConverter<Task> = {
@@ -80,7 +79,8 @@ const taskConverter: FirestoreDataConverter<Task> = {
 			createdAt: node.createdAt,
 			updatedAt: node.updatedAt,
 			completed: node.completed,
-			archived: node.archived
+			archived: node.archived,
+      type: node.type
 		};
 	},
 	fromFirestore: (snapshot: QueryDocumentSnapshot, options: SnapshotOptions): Task => {
@@ -92,7 +92,8 @@ const taskConverter: FirestoreDataConverter<Task> = {
 			createdAt: data.createdAt,
 			updatedAt: data.updatedAt,
 			completed: data.completed || false,
-			archived: data.archived || false
+			archived: data.archived || false,
+      type: data.type
 		};
 	}
 };
@@ -102,19 +103,43 @@ const tagConverter: FirestoreDataConverter<Tag> = {
     return {
       name: tag.name,
       createdAt: tag.createdAt,
-      updatedAt: tag.updatedAt
+      updatedAt: tag.updatedAt,
+      type: tag.type
     };
   },
   fromFirestore: (snapshot: QueryDocumentSnapshot, options: SnapshotOptions): Tag => {
-    const data = snapshot.data(options);
+	const data = snapshot.data(options);
+	return {
+	  id: snapshot.id,
+	  name: data.name,
+	  createdAt: data.createdAt,
+	  updatedAt: data.updatedAt,
+    type: data.type
+	} as Tag;  
+}
+}
+
+// TODO implement this
+const graphNodeConverter: FirestoreDataConverter<GraphNode> = {
+  toFirestore: (tag: Tag): DocumentData => {
     return {
-      id: snapshot.id,
-      name: data.name,
-      createdAt: data.createdAt,
-      updatedAt: data.updatedAt
+      name: tag.name,
+      createdAt: tag.createdAt,
+      updatedAt: tag.updatedAt,
+      type: tag.type
     };
+  },
+  fromFirestore: (snapshot: QueryDocumentSnapshot, options: SnapshotOptions): Tag => {
+	const data = snapshot.data(options);
+	return {
+	  id: snapshot.id,
+	  name: data.name,
+	  createdAt: data.createdAt,
+	  updatedAt: data.updatedAt,
+    type: data.type
+	};
   }
-};
+}
 
 export function initFirebase() {
 	// Initialize Firebase, auth, analytics, etc.
@@ -140,7 +165,7 @@ export function initFirebase() {
 				unsubscribe = onSnapshot(
 					nodesCollection.withConverter(taskConverter),
 					(snapshot) => {
-						items.nodes = snapshot.docs.map((doc) => {
+						collections.nodes = snapshot.docs.map((doc) => {
 							return doc.data() as Task; // Adjust type as needed
 						});
 					},

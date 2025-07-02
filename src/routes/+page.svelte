@@ -1,9 +1,5 @@
 <script lang="ts">
 	import TaskInputForm from './TaskInputForm.svelte';
-
-	import welcome from '$lib/images/svelte-welcome.webp';
-	import welcomeFallback from '$lib/images/svelte-welcome.png';
-	import { addTask } from '$lib/database';
 	import { firebase } from '$lib/globalState.svelte';
 	import { getAuth, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 	import { getApp } from 'firebase/app';

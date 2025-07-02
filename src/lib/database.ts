@@ -1,5 +1,6 @@
-import { firebase, items, getNodesCollection, getJunctionsCollection } from '$lib/globalState.svelte';
-import { addDoc, collection, doc, DocumentReference, getDoc, getDocs, query, QuerySnapshot, Timestamp, updateDoc, where } from 'firebase/firestore';
+import { firebase, collections, getNodesCollection, getJunctionsCollection, tagConverter, taskConverter, graphNodeConverter } from '$lib/globalState.svelte';
+import { EllipsisVertical, SearchCheck } from '@lucide/svelte';
+import { addDoc, collection, doc, DocumentReference, getDoc, getDocs, query, QuerySnapshot, Timestamp, updateDoc, where, type FirestoreDataConverter } from 'firebase/firestore';
 import { get } from 'svelte/store';
 
 export async function addTask(chunks: {
@@ -34,6 +35,7 @@ export async function addTask(chunks: {
 			updatedAt: Timestamp.now(),
       completed: false,
       archived: false,
+      type: 'task'
 		});
 		console.log('Task added to collection:', task, taskRef.id);
     
@@ -50,6 +52,7 @@ export async function addTask(chunks: {
           name: tag,
           createdAt: Timestamp.now(),
           updatedAt: Timestamp.now(),
+          type: 'tag'
         }) as DocumentReference<Tag>;
         console.log('Created new tag:', tag, tagRef.id);  
       }
@@ -65,7 +68,8 @@ export async function addTask(chunks: {
         parentId: tagRef.id,
         childId: taskRef.id,
         createdAt: Timestamp.now(),
-        type: 'tag-task'
+        parentType: 'tag',
+        childType: 'task'
       });
 
       console.log('Created junction:', tag, task, junctionRef.id);
@@ -90,48 +94,84 @@ export async function updateTask(id: string, update: Partial<Task>) {
 	}
 }
 
-export async function getTagsForTask(taskId: string): Promise<Tag[]> {
+export async function archiveTask(id: string) {
+  updateTask(id, { archived: true });
+}
+
+
+export async function completeTask(id: string) {
+  updateTask(id, { completed: true });
+}
+
+async function getRelations(nodeId: string, searchFor: 'parent' | 'child', targetType?: 'task' | 'tag') {
   const junctions = getJunctionsCollection();
   const nodes = getNodesCollection();
+
+  let nodeIs;
+
+  if (searchFor === 'parent')
+    nodeIs = 'child';
+  else
+    nodeIs = 'parent';
+
+  console.log('searching for ', searchFor, ' of type ', targetType);
 
   if (!junctions || !nodes) {
     console.error('Missing junctions or nodes collection');
     return [];
   }
 
-  if (!taskId) {
-    console.error('No task ID provided');
+  if (!nodeId) {
+    console.error('No node ID provided');
     return [];
   }
 
-  // find all junctions where childId is the taskId and type is 'tag-task'
-  // this will give us all tags associated with the task
-  const q = query(junctions, where('childId', '==', taskId), where('type', '==', 'tag-task'));
+  // find all junctions where childId is the child id
+  let q;
+  if(!targetType)
+    q = query(junctions, where(nodeIs + 'Id', '==', nodeId));
+  else
+    q = query(junctions, where(nodeIs + 'Id', '==', nodeId), where(searchFor + 'Type', '==', targetType));
+    
   const junctionQuerySnapshot = await getDocs(q);
-  const tagIds = junctionQuerySnapshot.docs.map(doc => {
+  console.log(junctionQuerySnapshot);
+  const targetIds = junctionQuerySnapshot.docs.map(doc => {
     const junction = doc.data() as Junction;
-    return junction.parentId; // parentId is the tag ID
+    return junction[(searchFor + 'Id') as keyof Junction];
   });
 
-  if( tagIds.length > 0) {
-    console.log('Found tags for task:', taskId, tagIds);
+  if(targetIds.length > 0) {
+    console.log('Found relations for node:', nodeId, targetIds);
 
-    const q2 = query(nodes, where('__name__', 'in', tagIds));
-    const tagQuerySnapshot = await getDocs(q2);
+    let converter;
+    if(targetType === 'tag')
+      converter = tagConverter;
+    else if(targetType === 'task')
+      converter = taskConverter;
+    else 
+      converter = graphNodeConverter;
 
-    const tags: Tag[] = tagQuerySnapshot.docs.map(doc => {
-      console.log('Tag doc:', doc.id, doc.data());
-      const data = doc.data() as Tag;
-      return {
-        id: doc.id,
-        name: data.name,
-        createdAt: data.createdAt,
-        updatedAt: data.updatedAt
-      };
-    });
-    return tags;
+    const q2 = query(nodes, where('__name__', 'in', targetIds)).withConverter(converter);
+    const parentQuerySnapshot = await getDocs(q2);
+
+    return parentQuerySnapshot.docs.map((doc) => doc.data());
   } else {
-    console.log('No tags found for task:', taskId);
+    console.log('No ', targetType, ' relations found for node:', nodeId);
     return [];
   }
+}
+
+export async function getTasksInTag(tagId: string) {
+  return (await getRelations(tagId, "child", "task")).map((doc) => doc as Task);
+}
+
+export async function getTagsForTask(taskId: string): Promise<Tag[]> {
+  return (await getRelations(taskId, 'parent', 'tag')).map((doc) => doc as Tag);
+}
+
+export async function getTagId(tagName: string) {
+  let nodes = getNodesCollection();
+  if (nodes)
+    return (await getDocs(query(nodes, where('name', '==', tagName)).withConverter(tagConverter))).docs[0].data() as Tag;
+  return null;
 }

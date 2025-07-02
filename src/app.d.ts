@@ -12,6 +12,7 @@ declare global {
 	type Task = {
 		id?: string;
 		name: string;
+		type: 'task';
 		createdAt: Timestamp;
 		updatedAt: Timestamp;
 		completed: boolean;
@@ -20,14 +21,16 @@ declare global {
 	type Tag = {
 		id?: string;
 		name: string;
+		type: 'tag';
 		createdAt: Timestamp;
 		updatedAt: Timestamp;
 	};
 	type GraphNode = Task | Tag;
-	interface Junction {
+	type Junction = {
 		parentId: string;
 		childId: string;
-		type: 'task-tag' | 'tag-task' | 'task-task' | 'tag-tag';
+		parentType: 'task' | 'tag';
+		childType: 'task' | 'tag';
 		createdAt: Timestamp;
 	}
 }

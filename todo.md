@@ -1,0 +1,4 @@
+- homepage with input box becomes sidebar on tasks page if screen is wide enough; becomes floating section above tasks list on mobile? collapsible
+- fetching tags via junctions incurs lag; how to fix?
+- load time still 30s+
+- add "unarchive" and "uncomplete" functions when clicking, eg, archive on an already archive tasks; change icons to fit
