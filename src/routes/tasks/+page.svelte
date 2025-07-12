@@ -3,7 +3,12 @@
 	import { collections } from '$lib/globalState.svelte';
 	import { Timestamp } from 'firebase/firestore';
 	import { goto } from '$app/navigation';
-	import { Check, Archive, Edit } from '@lucide/svelte';
+	import Check from '@lucide/svelte/icons/check';
+	import Archive from '@lucide/svelte/icons/archive';
+	import Edit from '@lucide/svelte/icons/edit';
+	import Eye from '@lucide/svelte/icons/eye';
+	import EyeOff from '@lucide/svelte/icons/eye-off';
+	import ListTodo from '@lucide/svelte/icons/list-todo';
 	import { fade, fly } from 'svelte/transition';
 
   // todo this seems like...a bad approach
@@ -84,46 +89,62 @@
 </script>
 
 <section>
-	<!-- Filter toggles -->
-	<div class="mb-4 flex gap-4 items-center">
-		<h2 class="text-xl font-semibold">Tasks</h2>
-		<div class="flex gap-3 ml-auto">
-			<label class="label cursor-pointer gap-2">
-				<input 
-					type="checkbox" 
-					class="checkbox checkbox-sm" 
-					bind:checked={showCompleted}
-				/>
-				<span class="label-text">Show completed</span>
-			</label>
-			<label class="label cursor-pointer gap-2">
-				<input 
-					type="checkbox" 
-					class="checkbox checkbox-sm" 
-					bind:checked={showArchived}
-				/>
-				<span class="label-text">Show archived</span>
-			</label>
-		</div>
-	</div>
-
-	<div class="task-table rounded-box bg-base-200 shadow-md p-4 px-6 flex flex-col">
+	<div class="task-table rounded-xl bg-gradient-to-br from-base-100 to-base-200 shadow-xl border border-base-300 p-6 flex flex-col">
     <!-- Table headers -->
-    <div class="task-header grid grid-cols-[fit-content(80%)_1fr_auto_auto] gap-4 py-2 items-center font-semibold border-b border-base-300 mb-2">
-      <div>Task</div>
+    <div class="task-header grid grid-cols-[fit-content(80%)_1fr_auto_auto] gap-4 py-4 items-center font-bold text-lg border-b-2 border-primary/20 mb-4">
+      <div class="text-primary">Tasks</div>
       <div></div> <!-- Empty column for spacing -->
-      <div class="text-right">Date</div>
-      <div class="text-right">Actions</div>
+      <div class="text-right">
+        <button 
+          class="header-toggle" 
+          class:active={showCompleted}
+          onclick={() => showCompleted = !showCompleted}
+          aria-label="{showCompleted ? 'Hide' : 'Show'} completed tasks"
+          title="{showCompleted ? 'Hide' : 'Show'} completed tasks"
+        >
+          <Check size={18} />
+        </button>
+      </div>
+      <div class="text-right">
+        <button 
+          class="header-toggle" 
+          class:active={showArchived}
+          onclick={() => showArchived = !showArchived}
+          aria-label="{showArchived ? 'Hide' : 'Show'} archived tasks"
+          title="{showArchived ? 'Hide' : 'Show'} archived tasks"
+        >
+          <Archive size={18} />
+        </button>
+      </div>
     </div>
 
-    {#each tasks as task (task.id)}
-      <div 
-        class="task-row grid grid-cols-[fit-content(80%)_1fr_auto_auto] gap-4 py-3 items-start hover-parent"
-        class:animating-out={animatingTasks.has(task.id || '')}
-        class:collapsing={collapsingTasks.has(task.id || '')}
-        in:fly="{{ y: 20, duration: 300, delay: 50 }}"
-        out:fly="{{ y: -20, duration: 200 }}"
-      >
+    {#if tasks.length === 0}
+      <div class="empty-state text-center py-12">
+        <div class="mb-4 opacity-50">
+          <ListTodo size={48} class="mx-auto text-base-content/30" />
+        </div>
+        <h3 class="text-lg font-semibold text-base-content/70 mb-2">No tasks found</h3>
+        <p class="text-sm text-base-content/50">
+          {#if !showCompleted && !showArchived}
+            All your tasks are completed or archived. Use the toggle buttons in the header to show them.
+          {:else if showCompleted && !showArchived}
+            No completed tasks to show.
+          {:else if !showCompleted && showArchived}
+            No archived tasks to show.
+          {:else}
+            Create your first task to get started!
+          {/if}
+        </p>
+      </div>
+    {:else}
+      {#each tasks as task (task.id)}
+        <div 
+          class="task-row grid grid-cols-[fit-content(80%)_1fr_auto_auto] gap-4 py-4 items-start hover-parent rounded-lg hover:bg-base-200/50 transition-all duration-200"
+          class:animating-out={animatingTasks.has(task.id || '')}
+          class:collapsing={collapsingTasks.has(task.id || '')}
+          in:fly="{{ y: 20, duration: 300, delay: 50 }}"
+          out:fly="{{ y: -20, duration: 200 }}"
+        >
         <div class="task-content">
           <div class="task-text mb-1">{task.name}</div>
           <div class="task-tags-display">
@@ -175,8 +196,9 @@
             <Edit />
           </button>
         </div>
-      </div>
-    {/each}
+        </div>
+      {/each}
+    {/if}
 	</div>
 </section>
 
@@ -189,16 +211,14 @@
   }
 
   .task-row {
-    border-bottom: 0.5px solid rgb(from var(--color-primary) r g b / 0.2);
+    border-bottom: 1px solid rgb(from var(--color-base-300) r g b / 0.5);
     transition: all 0.3s ease;
+    margin-bottom: 0.25rem;
   }
 
   .task-row:last-child {
     border-bottom: none;
-  }
-
-  .task-row:hover {
-    background-color: rgb(from var(--color-base-content) r g b / 0.02);
+    margin-bottom: 0;
   }
 
   .task-row.animating-out {
@@ -225,7 +245,44 @@
 
   .task-header {
     color: var(--color-base-content);
+    background: linear-gradient(135deg, 
+      rgb(from var(--color-base-200) r g b / 0.8) 0%, 
+      rgb(from var(--color-primary) r g b / 0.05) 50%, 
+      rgb(from var(--color-base-200) r g b / 0.8) 100%
+    );
+    border-radius: 0.5rem;
+    padding: 1rem 0.5rem;
+    margin: -0.5rem -0.25rem 1rem -0.25rem;
+  }
+
+  .header-toggle {
+    background: transparent;
+    border: none;
+    padding: 0.5rem;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: var(--color-base-content);
+    opacity: 0.4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .header-toggle:hover {
     opacity: 0.8;
+    background-color: rgb(from var(--color-base-content) r g b / 0.1);
+    transform: scale(1.1);
+  }
+
+  .header-toggle.active {
+    opacity: 1;
+    color: var(--color-primary);
+    background-color: rgb(from var(--color-primary) r g b / 0.1);
+  }
+
+  .header-toggle.active:hover {
+    background-color: rgb(from var(--color-primary) r g b / 0.2);
   }
 
   .task-content {
@@ -318,5 +375,10 @@
   .action-btn :global(svg) {
     width: 1rem;
     height: 1rem;
+  }
+
+  .header-toggle :global(svg) {
+    width: 1.125rem;
+    height: 1.125rem;
   }
 </style>
