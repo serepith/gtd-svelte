@@ -12,6 +12,7 @@
 	let contentEditableElement: HTMLDivElement | null = null;
 
 	const chunks = $derived.by(() => {
+		console.log("CHUNKS");
 		if (!taskText) return [];
 
 		// Split on separators but keep them using capturing groups
@@ -76,10 +77,10 @@
 			.join('')
 	);
 
-	// debugging
-	$effect(() => {
-		$inspect(firebase, 'firebase');
-	});
+	// // debugging
+	// $effect(() => {
+	// 	$inspect(firebase, 'firebase');
+	// });
 
 	// Update contenteditable with styled HTML when chunks change
 	// $effect(() => {
@@ -112,6 +113,7 @@
 
 	// Update contenteditable with styled HTML when chunks change
 	$effect(() => {
+		console.log("CURSOR EFFECT");
 		if (contentEditableElement && renderedHTML !== contentEditableElement.innerHTML) {
 			contentEditableElement.innerHTML = renderedHTML;
 
@@ -126,6 +128,8 @@
 
 	// Get cursor position in contenteditable
 	function getCursorPosition(): number {
+		console.log("CURSOR POSITION GET");
+
 		const selection = window.getSelection();
 		if (!selection || !contentEditableElement) return 0;
 
@@ -138,6 +142,8 @@
 
 	// Set cursor position in contenteditable
 	function setCursorPosition(pos: number) {
+		console.log("CURSOR POSITION SET");
+
 		if (!contentEditableElement) return;
 
 		const walker = document.createTreeWalker(contentEditableElement, NodeFilter.SHOW_TEXT, null);
@@ -163,6 +169,8 @@
 
 	// Check if cursor is currently in a tag
 	function isInTag(): boolean {
+		console.log("IS IN TAG");
+
 		// Find which chunk the cursor is in
 		let textPos = 0;
 		const cursorPos = getCursorPosition();
@@ -179,6 +187,8 @@
 	}
 
   function insertCharacterAtCursor(char: string) {
+		console.log("INSERT CHAR AT");
+
 		console.log("insert character cursor pos: ", getCursorPosition());
 		savedCursorPos = getCursorPosition();
 
@@ -250,6 +260,7 @@
 
 	// Handle keyboard events
 	function handleKeydown(event: KeyboardEvent) {
+		console.log("HANDLE KEYDOWN");
 
     if (event.key === '#' || event.key === '/') {
       event.preventDefault();
@@ -291,6 +302,8 @@
 
 	// Handle input from contenteditable
 	function handleInput(event: Event) {
+		console.log("HANDLE INPUT");
+
 		const target = event.target as HTMLDivElement;
 		taskText = target.textContent || '';
 
@@ -300,12 +313,16 @@
 
 	// Auto-resize the contenteditable
 	function resizeContentEditable(element: HTMLDivElement) {
+		console.log("RESIZE EDITABLE");
+
 		element.style.height = 'auto';
 		element.style.height = element.scrollHeight + 'px';
 	}
 
 	// Handle resize when content changes
 	$effect(() => {
+		console.log("RESIZE EFFECT");
+
 		// Reference taskText to make it a dependency
 		taskText;
 		if (contentEditableElement) {
@@ -315,6 +332,8 @@
 
 	// Handle form submission
 	function handleSubmit(event: Event) {
+		console.log("HANDLE SUBMIT");
+
 		event.preventDefault();
 
 		if (!firebase.user) {
@@ -334,6 +353,8 @@
 
 	// Sync taskText changes back to contenteditable (for when we clear it)
 	$effect(() => {
+		console.log("TASKTEXT EFFECT");
+
 		if (contentEditableElement && !taskText && contentEditableElement.innerHTML !== '') {
 			contentEditableElement.innerHTML = '';
 		}
@@ -343,7 +364,7 @@
 <form onsubmit={handleSubmit} class="justify-items-center">
 	<div class="relative mb-4 min-w-3xs">
 		<!-- Placeholder overlay -->
-		{#if !taskText.trim()}
+		<!-- {#if !taskText.trim()}
 			<div
 				class="textarea pointer-events-none absolute inset-0 p-3 
         bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary"
@@ -351,7 +372,7 @@
 			>
 				What's on your mind?
 			</div>
-		{/if}
+		{/if} -->
 
 		<div
 			bind:this={contentEditableElement}
@@ -366,9 +387,9 @@
 		></div>
 	</div>
 
-	<button type="submit" class="btn btn-soft btn-lg" class:btn-disabled={!firebase.user}
+	<!-- <button type="submit" class="btn btn-soft btn-lg" class:btn-disabled={!firebase.user}
 		>Submit</button
-	>
+	> -->
 </form>
 
 <style>

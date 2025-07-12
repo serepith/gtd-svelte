@@ -142,10 +142,13 @@ const graphNodeConverter: FirestoreDataConverter<GraphNode> = {
 }
 
 export function initFirebase() {
+	console.log('Initializing Firebase...');
 	// Initialize Firebase, auth, analytics, etc.
 	firebase.app = initializeApp(firebaseConfig);
 	firebase.db = getFirestore(firebase.app);
 	firebase.auth = getAuth(firebase.app);
+
+	console.log('Firebase initialized:', firebase.app.name);
 
 	// Set up auth state listener
 	if (firebase.auth) {
