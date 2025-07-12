@@ -4,5 +4,8 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-	plugins: [tailwindcss(), sveltekit(), devtoolsJson()]
-});
+	plugins: [tailwindcss(), sveltekit(), devtoolsJson()],
+	optimizeDeps: {
+		include: ['@firebase/firestore', '@firebase/app', '@firebase/auth', '@lucide/svelte'],
+	}
+},);

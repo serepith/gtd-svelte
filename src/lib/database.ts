@@ -1,6 +1,7 @@
 import { firebase, collections, getNodesCollection, getJunctionsCollection, tagConverter, taskConverter, graphNodeConverter } from '$lib/globalState.svelte';
-import { EllipsisVertical, SearchCheck } from '@lucide/svelte';
-import { addDoc, collection, doc, DocumentReference, getDoc, getDocs, query, QuerySnapshot, Timestamp, updateDoc, where, type FirestoreDataConverter } from 'firebase/firestore';
+import EllipsisVertical from '@lucide/svelte/icons/ellipsis-vertical';
+import SearchCheck from '@lucide/svelte/icons/search-check';
+import { addDoc, collection, doc, DocumentReference, getDoc, getDocs, getDocsFromCache, query, QuerySnapshot, Timestamp, updateDoc, where, type FirestoreDataConverter } from 'firebase/firestore';
 import { get } from 'svelte/store';
 
 export async function addTask(chunks: {
@@ -98,12 +99,14 @@ export async function archiveTask(id: string) {
   updateTask(id, { archived: true });
 }
 
-
 export async function completeTask(id: string) {
   updateTask(id, { completed: true });
 }
 
+// Everything below this point is *local only* and does not call Firestore
+
 async function getRelations(nodeId: string, searchFor: 'parent' | 'child', targetType?: 'task' | 'tag') {
+  let t1 = performance.now();
   const junctions = getJunctionsCollection();
   const nodes = getNodesCollection();
 
@@ -133,8 +136,10 @@ async function getRelations(nodeId: string, searchFor: 'parent' | 'child', targe
   else
     q = query(junctions, where(nodeIs + 'Id', '==', nodeId), where(searchFor + 'Type', '==', targetType));
     
-  const junctionQuerySnapshot = await getDocs(q);
-  console.log(junctionQuerySnapshot);
+  const junctionQuerySnapshot = await getDocsFromCache(q);
+
+  //console.log(junctionQuerySnapshot);
+
   const targetIds = junctionQuerySnapshot.docs.map(doc => {
     const junction = doc.data() as Junction;
     return junction[(searchFor + 'Id') as keyof Junction];
@@ -152,7 +157,10 @@ async function getRelations(nodeId: string, searchFor: 'parent' | 'child', targe
       converter = graphNodeConverter;
 
     const q2 = query(nodes, where('__name__', 'in', targetIds)).withConverter(converter);
-    const parentQuerySnapshot = await getDocs(q2);
+    const parentQuerySnapshot = await getDocsFromCache(q2);
+    
+    let t2 = performance.now();
+    console.log(`getRelations took ${t2 - t1} milliseconds`);
 
     return parentQuerySnapshot.docs.map((doc) => doc.data());
   } else {
@@ -172,6 +180,6 @@ export async function getTagsForTask(taskId: string): Promise<Tag[]> {
 export async function getTagId(tagName: string) {
   let nodes = getNodesCollection();
   if (nodes)
-    return (await getDocs(query(nodes, where('name', '==', tagName)).withConverter(tagConverter))).docs[0].data() as Tag;
+    return (await getDocsFromCache(query(nodes, where('name', '==', tagName)).withConverter(tagConverter))).docs[0].data() as Tag;
   return null;
 }

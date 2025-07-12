@@ -361,10 +361,10 @@
 	});
 </script>
 
-<form onsubmit={handleSubmit} class="justify-items-center">
-	<div class="relative mb-4 min-w-3xs">
+<form onsubmit={handleSubmit} class="justify-items-center grid grid-cols-1">
+	<div class="relative mb-4 min-w-3xs items-center">
 		<!-- Placeholder overlay -->
-		<!-- {#if !taskText.trim()}
+		{#if !taskText.trim()}
 			<div
 				class="textarea pointer-events-none absolute inset-0 p-3 
         bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary"
@@ -372,7 +372,7 @@
 			>
 				What's on your mind?
 			</div>
-		{/if} -->
+		{/if}
 
 		<div
 			bind:this={contentEditableElement}
@@ -387,9 +387,9 @@
 		></div>
 	</div>
 
-	<!-- <button type="submit" class="btn btn-soft btn-lg" class:btn-disabled={!firebase.user}
+	<button type="submit" class="btn btn-soft btn-lg" class:btn-disabled={!firebase.user}
 		>Submit</button
-	> -->
+	>
 </form>
 
 <style>

@@ -1,5 +1,3 @@
-// /+page.svelte
-
 <script lang="ts">
 	import TaskInputForm from './TaskInputForm.svelte';
 	import { firebase } from '$lib/globalState.svelte';
@@ -30,12 +28,12 @@
 
 <section>
 	<div class="grid grid-cols-1 gap-4 flex-1 items-center justify-items-center-safe" style="min-width: 25%;">
-		<!-- <TaskInputForm></TaskInputForm> -->
-
 		{#if !firebase.user}
 			<button class="btn btn-soft btn-lg min-w-sm" onclick={(e) => handleLogin(e)}
 				>Login</button
 			>
+		{:else}
+			<TaskInputForm></TaskInputForm>
 		{/if}
 	</div>
 </section>

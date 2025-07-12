@@ -1,11 +1,14 @@
 import { initializeApp, type FirebaseApp } from 'firebase/app';
 import { getAuth, type Auth, type User } from 'firebase/auth';
 import {
+	CACHE_SIZE_UNLIMITED,
 	// CACHE_SIZE_UNLIMITED,
 	collection,
 	CollectionReference,
 	getFirestore,
 	onSnapshot,
+	persistentLocalCache,
+	persistentMultipleTabManager,
 	// persistentLocalCache,
 	// persistentMultipleTabManager,
 	QueryDocumentSnapshot,
@@ -62,14 +65,14 @@ const firebaseConfig = {
 	messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
 	appId: import.meta.env.VITE_FIREBASE_APP_ID,
 	ignoreUndefinedProperties: true,
-	// localCache: persistentLocalCache({
-	// 	tabManager: persistentMultipleTabManager()
-	// }),
-	// persistence: true,
-	// persistenceSettings: {
-	// 	synchronizeTabs: true,
-	// 	cacheSizeBytes: CACHE_SIZE_UNLIMITED
-	// }
+	localCache: persistentLocalCache({
+		tabManager: persistentMultipleTabManager()
+	}),
+	persistence: true,
+	persistenceSettings: {
+		synchronizeTabs: true,
+		cacheSizeBytes: CACHE_SIZE_UNLIMITED
+	}
 };
 
 const taskConverter: FirestoreDataConverter<Task> = {
@@ -118,6 +121,29 @@ const tagConverter: FirestoreDataConverter<Tag> = {
 	} as Tag;  
 }
 }
+
+const junctionConverter: FirestoreDataConverter<Junction> = {
+	toFirestore: (junction: Junction): DocumentData => {
+		return {
+			parentId: junction.parentId,
+			childId: junction.childId,
+			parentType: junction.parentType,
+			childType: junction.childType,
+			createdAt: junction.createdAt
+		};
+	},
+	fromFirestore: (snapshot: QueryDocumentSnapshot, options: SnapshotOptions): Junction => {
+		const data = snapshot.data(options);
+		return {
+			id: snapshot.id,
+			parentId: data.parentId,
+			childId: data.childId,
+			parentType: data.parentType,
+			childType: data.childType,
+			createdAt: data.createdAt
+		} as Junction;
+	}
+};
 
 // TODO implement this
 const graphNodeConverter: FirestoreDataConverter<GraphNode> = {
@@ -174,6 +200,25 @@ export function initFirebase() {
 					},
 					(error) => {
 						console.error('Error fetching nodes:', error);
+					}
+				);
+			}
+
+			if (junctionsCollection) {
+				unsubscribe = onSnapshot(
+					junctionsCollection.withConverter(junctionConverter),
+					(snapshot) => {
+						const map = new Map<string, Junction[]>();
+						// map the junctions to their IDs
+						for (const doc of snapshot.docs) {
+							
+						}
+						collections.junctions = snapshot.docs.map((doc) => {
+							return doc.data() as Junction; // Adjust type as needed
+						});
+					},
+					(error) => {
+						console.error('Error fetching junctions:', error);
 					}
 				);
 			}
