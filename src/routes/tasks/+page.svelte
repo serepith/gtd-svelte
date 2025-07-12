@@ -107,7 +107,7 @@
 		</div>
 	</div>
 
-	<div class="task-table table rounded-box bg-base-200 shadow-md p-4 px-6 flex flex-col">
+	<div class="task-table rounded-box bg-base-200 shadow-md p-4 px-6 flex flex-col">
     <!-- Table headers -->
     <div class="task-header grid grid-cols-[fit-content(80%)_1fr_auto_auto] gap-4 py-2 items-center font-semibold border-b border-base-300 mb-2">
       <div>Task</div>
@@ -235,7 +235,7 @@
   .task-tags-display {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.25rem;
+    gap: 0.35rem;
     margin-top: 0.25rem;
   }
 

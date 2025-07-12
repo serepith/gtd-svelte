@@ -8,6 +8,15 @@
 	// 	$inspect(firebase, 'firebase');
 	// });
 
+	import type { Snapshot } from './$types';
+
+	let taskText = $state('');
+
+	export const snapshot: Snapshot = {
+		capture: () => taskText,
+		restore: (value) => taskText = value
+	};
+
 	// Handle login
 	async function handleLogin(event: Event) {
 		if (firebase.auth) {
@@ -33,7 +42,7 @@
 				>Login</button
 			>
 		{:else}
-			<TaskInputForm></TaskInputForm>
+			<TaskInputForm bind:taskText></TaskInputForm>
 		{/if}
 	</div>
 </section>

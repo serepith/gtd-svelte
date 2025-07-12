@@ -8,7 +8,8 @@
 
 	let savedCursorPos = 0;
 	// bindings
-	let taskText = $state('');
+	let { taskText = $bindable() } = $props();
+	
 	let contentEditableElement: HTMLDivElement | null = null;
 
 	const chunks = $derived.by(() => {
