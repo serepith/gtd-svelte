@@ -19,8 +19,9 @@ jobs:
     steps:
       - name: Print Firebase env vars
         run: |
-          echo "Env vars:"
-          env | grep PUBLIC_
+          echo "Checking for API key in built files:"
+          grep -r "AIza" build/ || echo "API key not found"
+          grep -r "PUBLIC_FIREBASE_" build/ || echo "No PUBLIC refs found"
   build_and_deploy:
     runs-on: ubuntu-latest
     steps:
