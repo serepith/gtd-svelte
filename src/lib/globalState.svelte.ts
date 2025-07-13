@@ -56,6 +56,12 @@ const getJunctionsCollection = () => {
 export { firebase, collections, getNodesCollection, getJunctionsCollection, 
   taskConverter, tagConverter, graphNodeConverter };
 
+	console.log("import meta env? ");
+	console.log(import.meta.env.PUBLIC_FIREBASE_API_KEY);
+
+	console.log("process env? ");
+	console.log(process.env.PUBLIC_FIREBASE_API_KEY);
+
 // pull config from environment variables
 const firebaseConfig = {
 	apiKey: "AIzaSyDLKovdscuzCb8PiAWjyud4GdGMRF8Kh5I",
