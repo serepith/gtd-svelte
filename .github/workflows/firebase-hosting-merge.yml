@@ -14,6 +14,13 @@ on:
     branches:
       - main
 jobs:
+  print_env:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print Firebase env vars
+        run: |
+          echo "Env vars:"
+          env | grep PUBLIC_
   build_and_deploy:
     runs-on: ubuntu-latest
     steps:
