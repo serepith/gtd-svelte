@@ -1,21 +1,14 @@
 <script lang="ts">
-	import { archiveTask, completeTask, getTagsForTask } from '$lib/database';
+	import { goto } from '$app/navigation';
+	import { getTagsForTask } from '$lib/database';
 	import { collections } from '$lib/globalState.svelte';
 	import { Timestamp } from 'firebase/firestore';
-	import { goto } from '$app/navigation';
-	import Check from '@lucide/svelte/icons/check';
-	//import CircleCheckBig from '@lucide/svelte/icons/circle-check-big';
-	import Archive from '@lucide/svelte/icons/archive';
-	import Edit from '@lucide/svelte/icons/edit';
-	import Eye from '@lucide/svelte/icons/eye';
-	import EyeOff from '@lucide/svelte/icons/eye-off';
-	import ListTodo from '@lucide/svelte/icons/list-todo';
-	import Slash from '@lucide/svelte/icons/slash';
-	import { draw, fade, fly, scale } from 'svelte/transition';
-	import { cubicOut } from 'svelte/easing';
-  import { flip } from 'svelte/animate';
-  import AnimatedIcon from '$lib/icons/AnimatedIcon.svelte';
+//import CircleCheckBig from '@lucide/svelte/icons/circle-check-big';
 	import { updateTask } from '$lib/database';
+	import AnimatedIcon from '$lib/icons/AnimatedIcon.svelte';
+	import Edit from '@lucide/svelte/icons/edit';
+	import ListTodo from '@lucide/svelte/icons/list-todo';
+	import { flip } from 'svelte/animate';
 
 	// Custom transition for "blipping out" effect
 	// function blipIn(node, { duration = 200 }) {

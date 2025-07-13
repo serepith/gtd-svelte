@@ -1,10 +1,8 @@
 <script lang="ts">
-	import TaskInputForm from './TaskInputForm.svelte';
 	import { firebase } from '$lib/globalState.svelte';
-	import { getAuth, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-	import { getApp } from 'firebase/app';
-
-	// $effect(() => {
+	import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+	import TaskInputForm from './TaskInputForm.svelte';
+// $effect(() => {
 	// 	$inspect(firebase, 'firebase');
 	// });
 

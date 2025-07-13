@@ -1,8 +1,5 @@
-import { firebase, collections, getNodesCollection, getJunctionsCollection, tagConverter, taskConverter, graphNodeConverter } from '$lib/globalState.svelte';
-import EllipsisVertical from '@lucide/svelte/icons/ellipsis-vertical';
-import SearchCheck from '@lucide/svelte/icons/search-check';
-import { addDoc, collection, doc, DocumentReference, getDoc, getDocs, getDocsFromCache, query, QuerySnapshot, Timestamp, updateDoc, where, type FirestoreDataConverter } from 'firebase/firestore';
-import { get } from 'svelte/store';
+import { getJunctionsCollection, getNodesCollection, graphNodeConverter, tagConverter, taskConverter } from '$lib/globalState.svelte';
+import { addDoc, doc, DocumentReference, getDocs, getDocsFromCache, query, Timestamp, updateDoc, where } from 'firebase/firestore';
 
 export async function addTask(chunks: {
     type: string;

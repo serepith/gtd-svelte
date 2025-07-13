@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { addTask } from '$lib/database';
 	import { firebase } from '$lib/globalState.svelte';
-	import { get } from 'svelte/store';
 
 	// Space character for tag boundaries
 	const SEPARATOR_SPACE = '\u2002';
