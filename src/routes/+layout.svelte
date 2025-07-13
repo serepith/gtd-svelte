@@ -1,7 +1,6 @@
 <script lang="ts">
 	import Header from './Header.svelte';
 	import '../app.css';
-	export const ssr = false;
 	let { children } = $props();
 </script>
 
