@@ -22,7 +22,7 @@ jobs:
       - run: |
             npm ci && npm run build
             echo "Build exit code: $?"
-            grep -r build "apiKey:" || echo "config not found"
+            grep -r "apiKey:" build || echo "config not found"
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
