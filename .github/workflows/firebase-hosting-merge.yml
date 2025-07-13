@@ -29,8 +29,7 @@ jobs:
       - run: |
             npm ci && npm run build
             echo "Build exit code: $?"
-            grep -r "AIza" || echo "API key not found"
-            grep -r "PUBLIC_FIREBASE_" || echo "No PUBLIC refs found"
+            grep -r "firebaseConfig" || echo "config not found"
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
