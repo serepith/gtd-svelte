@@ -1,10 +1,10 @@
+import { PUBLIC_FIREBASE_API_KEY, PUBLIC_FIREBASE_APP_ID, PUBLIC_FIREBASE_AUTH_DOMAIN, PUBLIC_FIREBASE_MESSAGING_SENDER_ID, PUBLIC_FIREBASE_PROJECT_ID, PUBLIC_FIREBASE_STORAGE_BUCKET } from '$env/static/public';
 import { initializeApp, type FirebaseApp } from 'firebase/app';
 import { getAuth, type Auth, type User } from 'firebase/auth';
 import {
 	CACHE_SIZE_UNLIMITED,
 	// CACHE_SIZE_UNLIMITED,
 	collection,
-	CollectionReference,
 	getFirestore,
 	onSnapshot,
 	persistentLocalCache,
@@ -12,7 +12,6 @@ import {
 	// persistentLocalCache,
 	// persistentMultipleTabManager,
 	QueryDocumentSnapshot,
-	Timestamp,
 	type DocumentData,
 	type Firestore,
 	type FirestoreDataConverter,
@@ -53,8 +52,7 @@ const getJunctionsCollection = () => {
   return null;
 };
 
-export { firebase, collections, getNodesCollection, getJunctionsCollection, 
-  taskConverter, tagConverter, graphNodeConverter };
+export { collections, firebase, getJunctionsCollection, getNodesCollection, graphNodeConverter, tagConverter, taskConverter };
 
 	console.log("import meta env? ");
 	console.log(import.meta.env.PUBLIC_FIREBASE_API_KEY);
@@ -64,12 +62,12 @@ export { firebase, collections, getNodesCollection, getJunctionsCollection,
 
 // pull config from environment variables
 const firebaseConfig = {
-	apiKey: process.env.PUBLIC_FIREBASE_API_KEY,
-	authDomain: import.meta.env.PUBLIC_FIREBASE_AUTH_DOMAIN,
-	projectId: import.meta.env.PUBLIC_FIREBASE_PROJECT_ID,
-	storageBucket: import.meta.env.PUBLIC_FIREBASE_STORAGE_BUCKET,
-	messagingSenderId: import.meta.env.PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-	appId: import.meta.env.PUBLIC_FIREBASE_APP_ID,
+	apiKey: PUBLIC_FIREBASE_API_KEY,
+	authDomain: PUBLIC_FIREBASE_AUTH_DOMAIN,
+	projectId: PUBLIC_FIREBASE_PROJECT_ID,
+	storageBucket: PUBLIC_FIREBASE_STORAGE_BUCKET,
+	messagingSenderId: PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+	appId: PUBLIC_FIREBASE_APP_ID,
 	ignoreUndefinedProperties: true,
 	localCache: persistentLocalCache({
 		tabManager: persistentMultipleTabManager()
