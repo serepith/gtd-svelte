@@ -64,7 +64,7 @@ export { firebase, collections, getNodesCollection, getJunctionsCollection,
 
 // pull config from environment variables
 const firebaseConfig = {
-	apiKey: "AIzaSyDLKovdscuzCb8PiAWjyud4GdGMRF8Kh5I",
+	apiKey: process.env.PUBLIC_FIREBASE_API_KEY,
 	authDomain: import.meta.env.PUBLIC_FIREBASE_AUTH_DOMAIN,
 	projectId: import.meta.env.PUBLIC_FIREBASE_PROJECT_ID,
 	storageBucket: import.meta.env.PUBLIC_FIREBASE_STORAGE_BUCKET,
