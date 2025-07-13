@@ -6,7 +6,6 @@
 	// Space character for tag boundaries
 	const SEPARATOR_SPACE = '\u2002';
 
-	let savedCursorPos = 0;
 	// bindings
 	let { taskText = $bindable() } = $props();
 	
@@ -60,18 +59,18 @@
 		return result;
 	});
 
-	// Render chunks as HTML
+	// Render chunks as HTML (for contenteditable updates)
 	const renderedHTML = $derived(
 		chunks
 			.map((chunk) => {
 				if (chunk.type === 'text') {
 					return chunk.content.replace(/\n/g, '<br>');
 				} else if (chunk.type === 'tag-inline') {
-					return `<span class="inline-flex items-center"><span class="bg-blue-100 text-blue-800 px-1 rounded text-sm">${chunk.content}</span></span>`;
+					return `<span class="inline-flex items-center"><span class="tag-chip-animate bg-primary text-primary-content px-2 py-1 rounded-full text-sm font-medium">${chunk.content}</span></span>`;
 				} else if (chunk.type === 'tag-meta') {
-					return `<span class="inline-flex items-center"><span class="bg-purple-100 text-purple-800 px-1 rounded text-sm">${chunk.content}</span></span>`;
+					return `<span class="inline-flex items-center"><span class="tag-chip-animate bg-accent text-accent-content px-2 py-1 rounded-full text-sm font-medium">${chunk.content}</span></span>`;
 				} else if (chunk.type === 'separator') {
-					return `<span class="text-gray-400">${SEPARATOR_SPACE}</span>`;
+					return `<span class="text-base-content opacity-40">${SEPARATOR_SPACE}</span>`;
 				}
 				return '';
 			})
@@ -116,21 +115,80 @@
 	$effect(() => {
 		console.log("CURSOR EFFECT");
 		if (contentEditableElement && renderedHTML !== contentEditableElement.innerHTML) {
+			// Save cursor position before updating HTML
+			const cursorOffset = saveCursorPosition();
+			
 			contentEditableElement.innerHTML = renderedHTML;
 
-			// Restore cursor position
-			console.log('Restoring cursor position:', savedCursorPos);
-			if (savedCursorPos > 0) {
-				setCursorPosition(savedCursorPos + 1); // +1 to account for the new character
-        // Since we saved the position before the last change
-			}
+			// Restore cursor position using offset
+			restoreCursorPosition(cursorOffset);
 		}
 	});
 
-	// Get cursor position in contenteditable
-	function getCursorPosition(): number {
-		console.log("CURSOR POSITION GET");
+	// Store and restore cursor position using text offset approach 
+	function saveCursorPosition(): number {
+		const selection = window.getSelection();
+		if (!selection || !contentEditableElement || selection.rangeCount === 0) return 0;
 
+		const range = selection.getRangeAt(0);
+		const preCaretRange = range.cloneRange();
+		preCaretRange.selectNodeContents(contentEditableElement);
+		preCaretRange.setEnd(range.endContainer, range.endOffset);
+		
+		const textOffset = preCaretRange.toString().length;
+		console.log('Saving cursor position:', textOffset);
+		return textOffset;
+	}
+
+	function restoreCursorPosition(textOffset: number) {
+		if (!contentEditableElement) return;
+		
+		console.log('Restoring cursor position to:', textOffset);
+		
+		const walker = document.createTreeWalker(
+			contentEditableElement, 
+			NodeFilter.SHOW_TEXT, 
+			null
+		);
+		
+		let currentOffset = 0;
+		let node;
+		
+		while ((node = walker.nextNode())) {
+			const nodeLength = node.textContent?.length || 0;
+			
+			if (currentOffset + nodeLength >= textOffset) {
+				const range = document.createRange();
+				const selection = window.getSelection();
+				const positionInNode = textOffset - currentOffset;
+				
+				try {
+					range.setStart(node, positionInNode);
+					range.setEnd(node, positionInNode);
+					selection?.removeAllRanges();
+					selection?.addRange(range);
+					console.log('Cursor restored successfully');
+					return;
+				} catch (e) {
+					console.error('Failed to restore cursor position:', e);
+				}
+			}
+			
+			currentOffset += nodeLength;
+		}
+		
+		console.log('Could not find position, placing at end');
+		// Fallback: place cursor at end
+		const range = document.createRange();
+		const selection = window.getSelection();
+		range.selectNodeContents(contentEditableElement);
+		range.collapse(false);
+		selection?.removeAllRanges();
+		selection?.addRange(range);
+	}
+
+	// Fallback: Get cursor position as plain text offset
+	function getCursorPosition(): number {
 		const selection = window.getSelection();
 		if (!selection || !contentEditableElement) return 0;
 
@@ -141,32 +199,6 @@
 		return preCaretRange.toString().length;
 	}
 
-	// Set cursor position in contenteditable
-	function setCursorPosition(pos: number) {
-		console.log("CURSOR POSITION SET");
-
-		if (!contentEditableElement) return;
-
-		const walker = document.createTreeWalker(contentEditableElement, NodeFilter.SHOW_TEXT, null);
-
-		let currentPos = 0;
-		let node;
-
-		while ((node = walker.nextNode())) {
-			console.log('Current node:', node.textContent, 'at position:', currentPos);
-			const nodeLength = node.textContent?.length || 0;
-			if (currentPos + nodeLength >= pos) {
-				const range = document.createRange();
-				const selection = window.getSelection();
-				range.setStart(node, pos - currentPos);
-				range.setEnd(node, pos - currentPos);
-				selection?.removeAllRanges();
-				selection?.addRange(range);
-				return;
-			}
-			currentPos += nodeLength;
-		}
-	}
 
 	// Check if cursor is currently in a tag
 	function isInTag(): boolean {
@@ -189,9 +221,6 @@
 
   function insertCharacterAtCursor(char: string) {
 		console.log("INSERT CHAR AT");
-
-		console.log("insert character cursor pos: ", getCursorPosition());
-		savedCursorPos = getCursorPosition();
 
     const selection = window.getSelection();
     if (!selection || !contentEditableElement) return;
@@ -367,9 +396,9 @@
 		<!-- Placeholder overlay -->
 		{#if !taskText.trim()}
 			<div
-				class="textarea pointer-events-none absolute inset-0 p-3 
+				class="textarea pointer-events-none absolute inset-0
         bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary"
-				style="z-index: 5; min-height: 2.5rem;"
+				style="z-index: 5; min-height: 3.5rem; padding: 1rem 0.75rem;"
 			>
 				What's on your mind?
 			</div>
@@ -381,10 +410,10 @@
 			role="textbox"
 			aria-multiline="true"
       tabindex="0"
-			class="textarea taskinput-textarea p-3 inset-0"
+			class="textarea taskinput-textarea inset-0"
 			oninput={handleInput}
 			onkeydown={handleKeydown}
-			style="min-height: 2.5rem; word-wrap: break-word; overflow-wrap: break-word; white-space: pre-wrap;"
+			style="min-height: 3.5rem; padding: 1rem 0.75rem; word-wrap: break-word; overflow-wrap: break-word; white-space: pre-wrap;"
 		></div>
 	</div>
 
@@ -396,5 +425,30 @@
 <style>
 	[contenteditable]:focus {
 		outline: none;
+	}
+
+	.tag-chip-animate {
+		animation: tag-chip-appear 0.25s ease-out forwards;
+		transform-origin: center;
+	}
+
+	@keyframes tag-chip-appear {
+		0% {
+			opacity: 0;
+			transform: scale(0.7);
+		}
+		60% {
+			opacity: 1;
+			transform: scale(1.1);
+		}
+		100% {
+			opacity: 1;
+			transform: scale(1);
+		}
+	}
+
+	/* Force animation restart on newly added elements */
+	.tag-chip-animate:not(:defined) {
+		animation-play-state: running;
 	}
 </style>

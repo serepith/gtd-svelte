@@ -4,12 +4,46 @@
 	import { Timestamp } from 'firebase/firestore';
 	import { goto } from '$app/navigation';
 	import Check from '@lucide/svelte/icons/check';
+	//import CircleCheckBig from '@lucide/svelte/icons/circle-check-big';
 	import Archive from '@lucide/svelte/icons/archive';
 	import Edit from '@lucide/svelte/icons/edit';
 	import Eye from '@lucide/svelte/icons/eye';
 	import EyeOff from '@lucide/svelte/icons/eye-off';
 	import ListTodo from '@lucide/svelte/icons/list-todo';
-	import { fade, fly } from 'svelte/transition';
+	import Slash from '@lucide/svelte/icons/slash';
+	import { draw, fade, fly, scale } from 'svelte/transition';
+	import { cubicOut } from 'svelte/easing';
+  import { flip } from 'svelte/animate';
+  import AnimatedIcon from '$lib/icons/AnimatedIcon.svelte';
+	import { updateTask } from '$lib/database';
+
+	// Custom transition for "blipping out" effect
+	// function blipIn(node, { duration = 200 }) {
+	// 	return {
+	// 		duration,
+	// 		css: t => {
+	// 			const eased = cubicOut(t);
+	// 			return `
+	// 				opacity: ${eased};
+	// 				transform: scale(${0.3 + eased * 0.7}) scaleX(-1);
+	// 			`;
+	// 		}
+	// 	};
+	// }
+
+	// function blipOut(node, { duration = 200 }) {
+	// 	return {
+	// 		duration,
+	// 		css: t => {
+	// 			const eased = cubicOut(1 - t);
+	// 			return `
+	// 				opacity: ${t};
+	// 				transform: scale(${t * 0.3}) scaleX(-1);
+	// 				filter: blur(${(1 - t) * 2}px);
+	// 			`;
+	// 		}
+	// 	};
+	// }
 
   // todo this seems like...a bad approach
   let showCompleted = $state(false);
@@ -47,26 +81,30 @@
 	let collapsingTasks = $state(new Set<string>());
 
 	export function handleComplete(task: Task) {
-		console.log('Complete task:', task.name);
-		if (!showCompleted) {
-			// Add visual feedback before removal
-			animatingTasks.add(task.id || '');
-			// Start collapsing after initial animation
-			setTimeout(() => {
-				collapsingTasks.add(task.id || '');
-			}, 200);
-			// Clean up tracking
-			setTimeout(() => {
-				animatingTasks.delete(task.id || '');
-				collapsingTasks.delete(task.id || '');
-			}, 800);
-		}
-		completeTask(task.id || '');
+		console.log('Toggle complete task:', task.name);
+		const willBeCompleted = !task.completed;
+		
+		// if (!showCompleted && willBeCompleted) {
+		// 	// Add visual feedback before removal
+		// 	animatingTasks.add(task.id || '');
+		// 	// Start collapsing after initial animation
+		// 	setTimeout(() => {
+		// 		collapsingTasks.add(task.id || '');
+		// 	}, 200);
+		// 	// Clean up tracking
+		// 	setTimeout(() => {
+		// 		animatingTasks.delete(task.id || '');
+		// 		collapsingTasks.delete(task.id || '');
+		// 	}, 800);
+		// }
+		updateTask(task.id || '', { completed: willBeCompleted });
 	}
 
 	export function handleArchive(task: Task) {
-		console.log('Archive task:', task.name);
-		if (!showArchived) {
+		console.log('Toggle archive task:', task.name);
+		const willBeArchived = !task.archived;
+		
+		if (!showArchived && willBeArchived) {
 			// Add visual feedback before removal
 			animatingTasks.add(task.id || '');
 			// Start collapsing after initial animation
@@ -79,7 +117,7 @@
 				collapsingTasks.delete(task.id || '');
 			}, 800);
 		}
-		archiveTask(task.id || '');
+		updateTask(task.id || '', { archived: willBeArchived });
 	}
 
 	export function handleEdit(task: any) {
@@ -91,30 +129,22 @@
 <section>
 	<div class="task-table rounded-xl bg-gradient-to-br from-base-100 to-base-200 shadow-xl border border-base-300 p-6 flex flex-col">
     <!-- Table headers -->
-    <div class="task-header grid grid-cols-[fit-content(80%)_1fr_auto_auto] gap-4 py-4 items-center font-bold text-lg border-b-2 border-primary/20 mb-4">
+    <div class="task-header grid grid-cols-[fit-content(80%)_1fr_auto_auto] gap-4 px-4 py-4 items-center font-bold text-lg border-b-2 border-primary/20 mb-4">
       <div class="text-primary">Tasks</div>
       <div></div> <!-- Empty column for spacing -->
       <div class="text-right">
-        <button 
-          class="header-toggle" 
-          class:active={showCompleted}
-          onclick={() => showCompleted = !showCompleted}
-          aria-label="{showCompleted ? 'Hide' : 'Show'} completed tasks"
-          title="{showCompleted ? 'Hide' : 'Show'} completed tasks"
-        >
-          <Check size={18} />
-        </button>
+        <AnimatedIcon
+          iconType="complete"
+          buttonType="filter"
+          size={1.5}
+          bind:selected={showCompleted}/>
       </div>
       <div class="text-right">
-        <button 
-          class="header-toggle" 
-          class:active={showArchived}
-          onclick={() => showArchived = !showArchived}
-          aria-label="{showArchived ? 'Hide' : 'Show'} archived tasks"
-          title="{showArchived ? 'Hide' : 'Show'} archived tasks"
-        >
-          <Archive size={18} />
-        </button>
+        <AnimatedIcon
+          iconType="archive"
+          buttonType="filter"
+          size={1.5}
+          bind:selected={showArchived}/>
       </div>
     </div>
 
@@ -139,11 +169,10 @@
     {:else}
       {#each tasks as task (task.id)}
         <div 
-          class="task-row grid grid-cols-[fit-content(80%)_1fr_auto_auto] gap-4 py-4 items-start hover-parent rounded-lg hover:bg-base-200/50 transition-all duration-200"
+          class="task-row grid grid-cols-[fit-content(80%)_1fr_auto_auto] gap-4 px-4 py-4 items-start hover-parent rounded-lg hover:bg-base-200/50 transition-all duration-200"
           class:animating-out={animatingTasks.has(task.id || '')}
           class:collapsing={collapsingTasks.has(task.id || '')}
-          in:fly="{{ y: 20, duration: 300, delay: 50 }}"
-          out:fly="{{ y: -20, duration: 200 }}"
+          animate:flip={{ duration: 200 }}
         >
         <div class="task-content">
           <div class="task-text mb-1">{task.name}</div>
@@ -171,22 +200,26 @@
           day: 'numeric' 
         })}</div>
         <div class="task-actions self-center">
-          <button 
+          <!-- <button 
             class="action-btn complete-btn"
+            class:active={task.completed}
             onclick={() => handleComplete(task)}
-            aria-label="Complete {task.name}"
-            title="Complete task"
-          >
-            <Check />
-          </button>
-          <button 
+            aria-label="{task.completed ? 'Uncomplete' : 'Complete'} {task.name}"
+            title="{task.completed ? 'Mark as incomplete' : 'Mark as complete'}"
+          > -->
+            <AnimatedIcon iconType="complete" buttonType="action" bind:selected={task.completed} />
+          <!-- </button> -->
+          <!-- <button 
             class="action-btn archive-btn"
+            class:active={task.archived}
             onclick={() => handleArchive(task)}
-            aria-label="Archive {task.name}"
-            title="Archive task"
+            aria-label="{task.archived ? 'Unarchive' : 'Archive'} {task.name}"
+            title="{task.archived ? 'Unarchive task' : 'Archive task'}"
           >
             <Archive />
-          </button>
+          </button> -->
+            <AnimatedIcon iconType="archive" buttonType="action" bind:selected={task.archived} />
+
           <button 
             class="action-btn edit-btn"
             onclick={() => handleEdit(task)}
@@ -243,46 +276,26 @@
     text-align: right;
   }
 
-  .task-header {
+  /* .task-header {
     color: var(--color-base-content);
     background: linear-gradient(135deg, 
       rgb(from var(--color-base-200) r g b / 0.8) 0%, 
       rgb(from var(--color-primary) r g b / 0.05) 50%, 
       rgb(from var(--color-base-200) r g b / 0.8) 100%
     );
-    border-radius: 0.5rem;
-    padding: 1rem 0.5rem;
-    margin: -0.5rem -0.25rem 1rem -0.25rem;
+  } */
+
+
+
+  .icon-stack {
+    position: relative;
+    display: inline-block;
+    width: 24px;
+    height: 24px;
   }
 
-  .header-toggle {
-    background: transparent;
-    border: none;
-    padding: 0.5rem;
-    border-radius: 0.375rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    color: var(--color-base-content);
-    opacity: 0.4;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .header-toggle:hover {
-    opacity: 0.8;
-    background-color: rgb(from var(--color-base-content) r g b / 0.1);
-    transform: scale(1.1);
-  }
-
-  .header-toggle.active {
-    opacity: 1;
-    color: var(--color-primary);
-    background-color: rgb(from var(--color-primary) r g b / 0.1);
-  }
-
-  .header-toggle.active:hover {
-    background-color: rgb(from var(--color-primary) r g b / 0.2);
+  .flip-horizontal {
+    transform: scaleX(-1);
   }
 
   .task-content {
@@ -337,7 +350,12 @@
     opacity: 1;
   }
 
-  .action-btn {
+  /* Active buttons bypass progressive disclosure */
+  .task-actions .action-btn.active {
+    opacity: 1;
+  }
+
+  /* .action-btn {
     padding: 0.25rem;
     border: none;
     background: transparent;
@@ -349,17 +367,17 @@
     display: flex;
     align-items: center;
     justify-content: center;
-  }
+  } */
 
-  .action-btn:hover {
+  /* .action-btn:hover {
     background-color: var(--color-base-300);
     transform: scale(1.1);
-  }
+  } */
 
-  .complete-btn:hover {
+  /* .complete-btn:hover {
     background-color: rgb(from var(--color-success) r g b / 0.2);
     color: var(--color-success);
-  }
+  } */
 
   .archive-btn:hover {
     background-color: rgb(from var(--color-warning) r g b / 0.2);
@@ -372,13 +390,28 @@
   }
 
   /* Icon sizing */
-  .action-btn :global(svg) {
+  /* .action-btn :global(svg) {
     width: 1rem;
     height: 1rem;
-  }
+  } */
 
-  .header-toggle :global(svg) {
-    width: 1.125rem;
-    height: 1.125rem;
+  /* .action-btn.active {
+    opacity: 1;
+    background-color: rgb(from var(--color-success) r g b / 0.15);
+  } */
+
+  /* .complete-btn:hover {
+    background-color: rgb(from var(--color-success) r g b / 0.2);
+    color: var(--color-success);
+  } */
+
+  /* .complete-btn.active {
+    color: var(--color-success);
+    background-color: rgb(from var(--color-success) r g b / 0.15);
+  } */
+
+  .archive-btn.active {
+    color: var(--color-warning);
+    background-color: rgb(from var(--color-warning) r g b / 0.15);
   }
 </style>
