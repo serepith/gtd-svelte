@@ -6,7 +6,7 @@
 	const SEPARATOR_SPACE = '\u2002';
 
 	// bindings
-	let { taskText = $bindable() } = $props();
+	let { taskText = $bindable(''), isSidebar = $bindable(false) } = $props();
 	
 	let contentEditableElement: HTMLDivElement | null = null;
 
@@ -390,40 +390,82 @@
 	});
 </script>
 
-<form onsubmit={handleSubmit} class="justify-items-center grid grid-cols-1">
-	<div class="relative mb-4 min-w-3xs items-center">
-		<!-- Placeholder overlay -->
-		{#if !taskText.trim()}
-			<div
-				class="textarea pointer-events-none absolute inset-0
-        bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary"
-				style="z-index: 5; min-height: 3.5rem; padding: 1rem 0.75rem;"
-			>
-				What's on your mind?
+<form onsubmit={handleSubmit} class="justify-items-center grid grid-cols-1" class:sidebar-form={isSidebar}>
+	{#if isSidebar}
+		<!-- Sidebar mode: button on left, input on right -->
+		<div class="sidebar-layout flex gap-3 w-full items-start">
+			<div class="relative flex-1 min-w-0">
+				<!-- Placeholder overlay -->
+				{#if !taskText.trim()}
+					<div
+						class="textarea pointer-events-none absolute inset-0
+						bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary"
+						style="z-index: 5; min-height: 3.5rem; padding: 1rem 0.75rem;"
+					>
+						What's on your mind?
+					</div>
+				{/if}
+
+				<div
+					bind:this={contentEditableElement}
+					contenteditable="true"
+					role="textbox"
+					aria-multiline="true"
+					tabindex="0"
+					class="textarea taskinput-textarea inset-0"
+					oninput={handleInput}
+					onkeydown={handleKeydown}
+					style="min-height: 3.5rem; padding: 1rem 0.75rem; word-wrap: break-word; overflow-wrap: break-word; white-space: pre-wrap;"
+				></div>
 			</div>
-		{/if}
+			<button type="submit" class="btn btn-soft flex-shrink-0 mt-4" class:btn-disabled={!firebase.user}
+				>+</button>
+		</div>
+	{:else}
+		<!-- Normal mode: stacked layout -->
+		<div class="relative mb-4 min-w-3xs items-center">
+			<!-- Placeholder overlay -->
+			{#if !taskText.trim()}
+				<div
+					class="textarea pointer-events-none absolute inset-0
+					bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary"
+					style="z-index: 5; min-height: 3.5rem; padding: 1rem 0.75rem;"
+				>
+					What's on your mind?
+				</div>
+			{/if}
 
-		<div
-			bind:this={contentEditableElement}
-			contenteditable="true"
-			role="textbox"
-			aria-multiline="true"
-      tabindex="0"
-			class="textarea taskinput-textarea inset-0"
-			oninput={handleInput}
-			onkeydown={handleKeydown}
-			style="min-height: 3.5rem; padding: 1rem 0.75rem; word-wrap: break-word; overflow-wrap: break-word; white-space: pre-wrap;"
-		></div>
-	</div>
+			<div
+				bind:this={contentEditableElement}
+				contenteditable="true"
+				role="textbox"
+				aria-multiline="true"
+				tabindex="0"
+				class="textarea taskinput-textarea inset-0"
+				oninput={handleInput}
+				onkeydown={handleKeydown}
+				style="min-height: 3.5rem; padding: 1rem 0.75rem; word-wrap: break-word; overflow-wrap: break-word; white-space: pre-wrap;"
+			></div>
+		</div>
 
-	<button type="submit" class="btn btn-soft btn-lg" class:btn-disabled={!firebase.user}
-		>Submit</button
-	>
+		<button type="submit" class="btn btn-soft btn-lg" class:btn-disabled={!firebase.user}
+			>Submit</button
+		>
+	{/if}
 </form>
 
 <style>
 	[contenteditable]:focus {
 		outline: none;
+	}
+
+	.sidebar-form {
+		width: 100%;
+		justify-items: stretch;
+	}
+
+	.sidebar-layout {
+		align-items: flex-start;
 	}
 
 	.tag-chip-animate {

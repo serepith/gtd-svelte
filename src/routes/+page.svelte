@@ -39,8 +39,8 @@
 			<button class="btn btn-soft btn-lg min-w-sm" onclick={(e) => handleLogin(e)}
 				>Login</button
 			>
-		{:else}
-			<TaskInputForm bind:taskText></TaskInputForm>
+		<!-- {:else}
+			<TaskInputForm bind:taskText></TaskInputForm> -->
 		{/if}
 	</div>
 </section>

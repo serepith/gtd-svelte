@@ -26,6 +26,12 @@ let firebase: {
 	user: User | null;
 } = $state({ app: null, db: null, auth: null, user: null });
 
+// UI State
+let uiState = $state({
+	sidebarVisible: false,
+	transitioningToTasks: false
+});
+
 let nodesCollection = $derived(
 	firebase.user && firebase.db
 		? collection(firebase.db, 'users', firebase.user?.uid, 'nodes')
@@ -52,13 +58,7 @@ const getJunctionsCollection = () => {
   return null;
 };
 
-export { collections, firebase, getJunctionsCollection, getNodesCollection, graphNodeConverter, tagConverter, taskConverter };
-
-	console.log("import meta env? ");
-	console.log(import.meta.env.PUBLIC_FIREBASE_API_KEY);
-
-	console.log("process env? ");
-	console.log(process.env.PUBLIC_FIREBASE_API_KEY);
+export { collections, firebase, uiState, getJunctionsCollection, getNodesCollection, graphNodeConverter, tagConverter, taskConverter };
 
 // pull config from environment variables
 const firebaseConfig = {

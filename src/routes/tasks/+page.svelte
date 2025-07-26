@@ -97,25 +97,25 @@
 		console.log('Toggle archive task:', task.name);
 		const willBeArchived = !task.archived;
 		
-		if (!showArchived && willBeArchived) {
-			// Add visual feedback before removal
-			animatingTasks.add(task.id || '');
-			// Start collapsing after initial animation
-			setTimeout(() => {
-				collapsingTasks.add(task.id || '');
-			}, 200);
-			// Clean up tracking
-			setTimeout(() => {
-				animatingTasks.delete(task.id || '');
-				collapsingTasks.delete(task.id || '');
-			}, 800);
-		}
+		// if (!showArchived && willBeArchived) {
+		// 	// Add visual feedback before removal
+		// 	animatingTasks.add(task.id || '');
+		// 	// Start collapsing after initial animation
+		// 	setTimeout(() => {
+		// 		collapsingTasks.add(task.id || '');
+		// 	}, 200);
+		// 	// Clean up tracking
+		// 	setTimeout(() => {
+		// 		animatingTasks.delete(task.id || '');
+		// 		collapsingTasks.delete(task.id || '');
+		// 	}, 800);
+		// }
 		updateTask(task.id || '', { archived: willBeArchived });
 	}
 
 	export function handleEdit(task: any) {
 		console.log('Edit task:', task.name);
-		// TODO: implement edit logic
+		goto(`/tasks/${task.id}`);
 	}
 </script>
 

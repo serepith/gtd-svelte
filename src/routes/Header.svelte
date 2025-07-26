@@ -1,7 +1,29 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import { goto } from '$app/navigation';
+	import { uiState, firebase } from '$lib/globalState.svelte';
 	import logo from '$lib/images/svelte-logo.svg';
 	import github from '$lib/images/github.svg';
+	
+	function handleTasksClick(e: Event) {
+		e.preventDefault();
+		
+		// If coming from homepage and user is logged in, show sidebar
+		if (page.url.pathname === '/' && firebase.user) {
+			uiState.sidebarVisible = true;
+		}
+		
+		goto('/tasks');
+	}
+	
+	function handleHomeClick(e: Event) {
+		e.preventDefault();
+		
+		// Hide sidebar when going to home
+		uiState.sidebarVisible = false;
+		
+		goto('/');
+	}
 </script>
 
 <header>
@@ -11,10 +33,10 @@
 		</svg>
 		<ul>
 			<li aria-current={page.url.pathname === '/' ? 'page' : undefined}>
-				<a href="/">Home</a>
+				<a href="/" onclick={handleHomeClick}>Home</a>
 			</li>
 			<li aria-current={page.url.pathname === '/tasks' ? 'page' : undefined}>
-				<a href="/tasks">Tasks</a>
+				<a href="/tasks" onclick={handleTasksClick}>Tasks</a>
 			</li>
 		</ul>
 		<svg viewBox="0 0 2 3" aria-hidden="true">
