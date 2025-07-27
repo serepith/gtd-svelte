@@ -33,7 +33,7 @@
 
 	type Chunk = { content: string, type: 'text' | 'tag' };
 
-	let chunks = $state([chunk('ttt')]);
+	let chunks = $state([chunk('')]);
 
 	let chunkTypes = $derived(chunks.map(chunk => 
 			chunk.content.startsWith('#') ? 'tag' : 'text'
@@ -63,47 +63,49 @@
 	$inspect(currentChunk).with(console.log);
 	$inspect(currentNodeTextPosition).with(console.log);
 
-	// claude code
+	function spliceOutChunk (i: number) {
+		let newFocus;
+		let newFocusOffset : number;
+
+		// If we're deleting the active chunk, move cursor to previous
+		if (i === currentNodeIndex) {
+			console.log("i=" + i + " current node ndex " + currentNodeIndex);
+			newFocus = i-1;
+			newFocusOffset = chunks[i - 1].content.length;
+		}
+		
+		chunks.splice(i, 1);
+
+		//console.log("new focus wtf " + newFocus);
+
+		if(newFocus != undefined) {
+			// set timeout so the DOM will update first
+			setTimeout(() => {
+				//console.log("NEW FOCUS index " + (i-1));
+				let newFocusElement = taskInputElement?.querySelector(`[data-item-id="${i-1}"]`);
+				//console.log("NEW FOCUS " + newFocusElement?.outerHTML);
+				// set focus to the text so we can put the cursor in the proper location
+				if(newFocusElement)
+					window.getSelection()?.setPosition(newFocusElement.firstChild, newFocusOffset);
+			}, 0);
+		}
+	}
+
+	// claude code -- clean up text chunks whenever chunks updates
 	$effect(() => {
-		//console.log("cleanup");
 		let merged = [];
 		let i = 0;
 		let mergedNodeIndex;
 		
 		for (let i = chunks.length - 1; i > 0; i--) {
 			if (chunkTypes[i] === 'text' && chunkTypes[i - 1] === 'text') {
-				let newFocus;
-				let newFocusOffset : number;
-
-				// If we're deleting the active chunk, move cursor to previous
-				if (i === currentNodeIndex) {
-					console.log("i=" + i + " current node ndex " + currentNodeIndex);
-					newFocus = i-1;
-					newFocusOffset = chunks[i - 1].content.length;
-				}
 				
 				chunks[i - 1].content += chunks[i].content;
-				chunks.splice(i, 1);
-
-				console.log("new focus wtf " + newFocus);
-
-				if(newFocus != undefined) {
-					// set timeout so the DOM will update first
-					setTimeout(() => {
-						//console.log("NEW FOCUS index " + (i-1));
-						let newFocusElement = taskInputElement?.querySelector(`[data-item-id="${i-1}"]`);
-						//console.log("NEW FOCUS " + newFocusElement?.outerHTML);
-						// set focus to the text so we can put the cursor in the proper location
-						if(newFocusElement)
-							window.getSelection()?.setPosition(newFocusElement.firstChild, newFocusOffset);
-					}, 0);
-				}
+				spliceOutChunk(i);
 			}
   	}
-		
 	});
 	
-
 	function isInTag(): boolean {
 		if(currentNode?.classList)
 			return currentNode.classList.contains('tag-chip');
@@ -127,35 +129,20 @@
 
 		updateCurrentNode();
 
-		if(getPrecedingChar() === '#') {
-			if (event.key === '#' || event.key === '/') {
-      	event.preventDefault();
-				return;
-			}
-			else if (event.key === 'Backspace') {
-				// if(currentNode?.dataset && currentNode?.dataset.itemId) {
-				// 	(chunks[parseInt(currentNode.dataset.itemId)]).type() = 'text';
-				// }
-			}
-		}
-
     if (event.key === '#' || event.key === '/') {
       event.preventDefault();
 
-      // Prevent invalid separator pairs
-      if (wouldCreateInvalidPair(event.key)) {
-        return;
-      }
+			// no empty tags
+			if(getPrecedingChar() === '#')
+				return;
 
 			const nodeText = currentNode?.textContent;
 
 			const textBeforeCursor = nodeText?.substring(0, currentNodeTextPosition) || '';
 			const textAfterCursor = nodeText?.substring(currentNodeTextPosition || nodeText?.length);
 
-			console.log("substring 1: " + textBeforeCursor);
-			console.log("substring 2: " + textAfterCursor);
-
-			currentChunk.content += ' ';
+			// console.log("substring 1: " + textBeforeCursor);
+			// console.log("substring 2: " + textAfterCursor);
 
 			currentChunk.content = textBeforeCursor;
 			//chunks.push(chunk('#' + textAfterCursor));
@@ -166,9 +153,9 @@
 				currentNodeTextPosition = (currentNodeTextPosition - textBeforeCursor.length + 1);
 
 			setTimeout(() => {
-				console.log("current node: " + currentNode?.outerHTML);
-				console.log("parent node: " + currentNode?.parentElement?.outerHTML);
-				console.log("uhhh " + currentNode?.nextElementSibling?.outerHTML);
+				// console.log("current node: " + currentNode?.outerHTML);
+				// console.log("parent node: " + currentNode?.parentElement?.outerHTML);
+				// console.log("uhhh " + currentNode?.nextElementSibling?.outerHTML);
 				if(currentNode?.nextElementSibling) {
 						//alert("set pos to next sib"+ currentNode.nextSibling.parentElement?.outerHTML);
 						window.getSelection()?.setPosition(currentNode.nextElementSibling, 1);
@@ -186,6 +173,15 @@
  
       return;
     }
+		
+		else if (event.key === 'Backspace') {
+			// if(currentNode?.dataset && currentNode?.dataset.itemId) {
+			// 	(chunks[parseInt(currentNode.dataset.itemId)]).type() = 'text';
+			// }
+			//console.log("text elngth " + currentNode?.textContent);
+			if (!currentNode?.textContent)
+				spliceOutChunk(currentNodeIndex);
+		}
 
     // Otherwise, if we're in a tag, handle escape characters
     else if(isInTag()) {
@@ -193,6 +189,18 @@
         // If we're in a tag and hit an escape character, end the current tag
         //insertCharacterAtCursor(SEPARATOR_SPACE);
         event.preventDefault();
+				chunks.push(chunk(''));
+
+				setTimeout(() => {
+				// console.log("current node: " + currentNode?.outerHTML);
+				// console.log("parent node: " + currentNode?.parentElement?.outerHTML);
+				// console.log("uhhh " + currentNode?.nextElementSibling?.outerHTML);
+				if(currentNode?.nextElementSibling) {
+						//alert("set pos to next sib"+ currentNode.nextSibling.parentElement?.outerHTML);
+						window.getSelection()?.setPosition(currentNode.nextElementSibling, 0);
+						//updateCurrentNode();
+					}
+			}, 0);
       }
       return;
     }
@@ -200,7 +208,7 @@
 		else if (event.key === 'Enter' && !event.shiftKey) {
       // Regular Enter - submit
       event.preventDefault();
-      //handleSubmit(event);
+      handleSubmit(event);
 		} 
 
 		//console.log('Cursor position after check: ', getCursorPosition());
@@ -308,20 +316,20 @@
 					transition:scale={{ duration: 50 }}
 					onkeydown={handleKeydown}
 					onkeyup={(e) => {
-						if(i > 0 && (chunks[i].content.length === 0 || chunk.content === '<br>')) {
-							console.log("CURRENT NODE " + currentNode?.outerHTML);
-							if(currentNode?.previousElementSibling) {
-									//alert("set pos to next sib"+ currentNode.nextSibling.parentElement?.outerHTML);
-									window.getSelection()?.setPosition(currentNode.previousElementSibling, 1);
-									//updateCurrentNode();
-								}
-							chunks.splice(i, 1);
-							//setTimeout(() => {
-							// console.log("current node: " + currentNode?.outerHTML);
-							// console.log("parent node: " + currentNode?.parentElement?.outerHTML);
-							// console.log("uhhh " + currentNode?.nextElementSibling?.outerHTML);
-						//}, 0);
-						}
+						// if(i > 0 && (chunks[i].content.length === 0 || chunk.content === '<br>')) {
+						// 	console.log("CURRENT NODE " + currentNode?.outerHTML);
+						// 	if(currentNode?.previousElementSibling) {
+						// 			//alert("set pos to next sib"+ currentNode.nextSibling.parentElement?.outerHTML);
+						// 			window.getSelection()?.setPosition(currentNode.previousElementSibling, 1);
+						// 			//updateCurrentNode();
+						// 		}
+						// 	chunks.splice(i, 1);
+						// 	//setTimeout(() => {
+						// 	// console.log("current node: " + currentNode?.outerHTML);
+						// 	// console.log("parent node: " + currentNode?.parentElement?.outerHTML);
+						// 	// console.log("uhhh " + currentNode?.nextElementSibling?.outerHTML);
+						// //}, 0);
+						// }
 						// console.log('Updated chunk', i, chunks[i].content);
 						// 	console.log("selection after: ", sel?.anchorNode?.textContent);
 						// 	console.log("index: ", sel?.anchorOffset);
