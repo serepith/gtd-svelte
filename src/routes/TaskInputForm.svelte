@@ -2,6 +2,7 @@
 	import { addTask } from '$lib/database';
 	import { firebase } from '$lib/globalState.svelte';
 	import { tick } from 'svelte';
+	import { fade, scale } from 'svelte/transition';
 
 	// Space character for tag boundaries
 	//const SEPARATOR_SPACE = '\u2002';
@@ -9,60 +10,28 @@
 	// bindings
 	let { isSidebar = $bindable(false) } = $props();
 	
-	let contentEditableElement: HTMLDivElement | null = null;
+	let taskInputElement: HTMLDivElement | null = null;
 
-	// const chunks = $derived.by(() => {
-	// 	console.log("CHUNKS");
-	// 	if (!taskText) return [];
+	class Chunk2 {
+		content: string;
+		type: 'text' | 'tag';
 
-	// 	// Split on separators but keep them using capturing groups
-	// 	const parts = taskText.split(/(#|\/|\u2002)/).filter(Boolean);
-	// 	const result = [];
-	// 	console.log('Parts:', parts);
-	// 	let currentText = '';
-	// 	let currentType = 'text';
+		constructor(ctn?: string, typ?: 'text' | 'tag') {
+			this.content = $state(ctn || '');
+			this.type = $derived(this.content.includes('#') ? 'tag' : 'text');
+		}
+	}
 
-	// 	for (const part of parts) {
-	// 		if (part === '#') {
-	// 			// Push any accumulated text first
-	// 			if (currentText && currentType === 'text') {
-	// 				result.push({ type: currentType, content: currentText });
-	// 			}
-	// 			currentText = '#';
-	// 			currentType = 'tag-inline';
-	// 		} else if (part === '/') {
-	// 			// Push any accumulated text first
-	// 			if (currentText || currentType === 'text') {
-	// 				result.push({ type: currentType, content: currentText });
-	// 			}
-	// 			currentText = '/';
-	// 			currentType = 'tag-meta';
-	// 		} else if (part === SEPARATOR_SPACE) {
-	// 			// End current chunk
-  //       result.push({ type: currentType, content: currentText });
-  //       // Push separator
-  //       result.push({ type: 'separator', content: SEPARATOR_SPACE });
-  //       // Reset for next chunk
-  //       currentText = '';
-  //       currentType = 'text';
-	// 		} else if (part !== undefined) {
-	// 			currentText += part;
-	// 		}
-	// 	}
+	//const chunk = (content?: string, type?: 'text' | 'tag') => new Chunk(content, type);
 
-	// 	// Don't forget the last chunk
-	// 	if (currentText || currentType !== 'text') {
-	// 		result.push({ type: currentType, content: currentText });
-	// 	}
-
-  //   console.log('Chunks:', result);
-	// 	return result;
-	// });
+	const chunk = (content: string = '', type: 'text' | 'tag' = 'text') => {
+		let c = { content, type };
+		return c;
+	}
 
 	type Chunk = { content: string, type: 'text' | 'tag' };
 
-	let chunks = $state([{ content: 'tttt', type: 'text' }]);
-	$inspect(chunks).with(console.log);
+	let chunks = $state([new Chunk2('ttt')]);
 
 	function getCurrentNode() {
 		return window.getSelection()?.anchorNode?.parentElement;
@@ -78,8 +47,14 @@
 	}
 
 	let currentNode = $state(window.getSelection()?.anchorNode?.parentElement);
+	let currentPosition = $state(window.getSelection()?.anchorOffset);
+	let currentChunk = $derived(chunks[parseInt(currentNode?.dataset.itemId || '0')]);
 
-	let currentChunk = $state(chunks[0]);
+	
+	$inspect(chunks).with(console.log);
+	$inspect(currentChunk).with(console.log);
+	$inspect(currentPosition).with(console.log);
+	
 
 	function isInTag(): boolean {
 		if(currentNode?.classList)
@@ -110,7 +85,9 @@
 				return;
 			}
 			else if (event.key === 'Backspace') {
-				// TODO: how to link chunks to DOM?
+				if(currentNode?.dataset && currentNode?.dataset.itemId) {
+					(chunks[parseInt(currentNode.dataset.itemId)]).type = 'text';
+				}
 			}
 		}
 
@@ -122,13 +99,11 @@
         return;
       }
 
-			chunks.push({ content: '#', type: 'tag' });
-				//insertCharacterAtCursor(event.key);
-			// alert(currentNode);
-			// alert(currentNode?.nextSibling);
-
-			// await tick();
-			// await tick();
+			const nodeText = currentNode?.textContent;
+			currentChunk.content += ' ';
+			//currentChunk.content = nodeText?.substring(0, currentPosition) || '';
+			//chunks.push(new Chunk2('#' + ((nodeText && currentPosition) ? nodeText.substring(currentPosition) : '')));
+			chunks.push(new Chunk2('#'));
 
 			setTimeout(() => {
 				console.log("current node: " + currentNode?.outerHTML);
@@ -139,7 +114,7 @@
 						window.getSelection()?.setPosition(currentNode.nextElementSibling, 1);
 						//updateCurrentNode();
 					}
-			}, 75);
+			}, 0);
 
 			// else if (isInTag()) {
 			// }
@@ -171,16 +146,6 @@
 		//console.log('Cursor position after check: ', getCursorPosition());
 	}
 
-	// Handle input from contenteditable
-	// function handleInput(event: Event) {
-	// 	console.log("HANDLE INPUT");
-
-	// 	const target = event.target as HTMLDivElement;
-	// 	//taskText = target.textContent || '';
-
-	// 	// Update saved cursor position after input
-	// 	//savedCursorPos = getCursorPosition();
-	// }
 
 	// Auto-resize the contenteditable
 	// function resizeContentEditable(element: HTMLDivElement) {
@@ -201,40 +166,41 @@
 	// 	}
 	// });
 
+	function taskTextEmpty() {
+		return chunks.length === 1 && (chunks[0].content.length === 0 || chunks[0].content === '<br>');
+	}
+
 	// Handle form submission
-	// function handleSubmit(event: Event) {
-	// 	console.log("HANDLE SUBMIT");
+	function handleSubmit(event: Event) {
+		console.log("HANDLE SUBMIT");
 
-	// 	event.preventDefault();
+		event.preventDefault();
 
-	// 	if (!firebase.user) {
-	// 		alert('Please log in to add a task.');
-	// 		return;
-	// 	}
+		if (!firebase.user) {
+			alert('Please log in to add a task.');
+			return;
+		}
 
-	// 	if (taskText.trim()) {
-  //     console.log(chunks);
-	// 		addTask(chunks);
-	// 		taskText = '';
-	// 		if (contentEditableElement) {
-	// 			contentEditableElement.innerHTML = '';
-	// 		}
-	// 	}
-	// }
-
-	// Sync taskText changes back to contenteditable (for when we clear it)
-	// $effect(() => {
-	// 	console.log("TASKTEXT EFFECT");
-
-	// 	if (contentEditableElement && !taskText && contentEditableElement.innerHTML !== '') {
-	// 		contentEditableElement.innerHTML = '';
-	// 	}
-	// });
+		if (!taskTextEmpty()) {
+      console.log(chunks);
+			addTask(chunks);
+			chunks = [];
+		}
+	}
 
 	function updateCurrentNode() {
-		console.log("update to " + window.getSelection()?.anchorNode?.parentElement?.outerHTML);
-		if(window.getSelection()?.anchorNode)
+		// console.log("current node " + window.getSelection()?.anchorNode?.textContent);
+		// console.log("parent node " + window.getSelection()?.anchorNode?.parentElement?.outerHTML);
+
+		// node type 3 is text
+		if(window.getSelection()?.anchorNode?.nodeType === 3)
 			currentNode = window.getSelection()?.anchorNode?.parentElement;
+
+		// 2 is element
+		else if(window.getSelection()?.anchorNode?.nodeType === 1)
+			currentNode = window.getSelection()?.anchorNode as HTMLElement;
+
+		currentPosition = window.getSelection()?.anchorOffset;
 	}
 </script>
 
@@ -245,7 +211,7 @@
 	<!-- Normal mode: stacked layout -->
 	<div class="relative mb-4 min-w-3xs items-center">
 		<!-- Placeholder overlay -->
-		<!-- {#if !taskText.trim()}
+		{#if taskTextEmpty()}
 			<div
 				class="textarea pointer-events-none absolute inset-0
 				bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary"
@@ -253,21 +219,54 @@
 			>
 				What's on your mind?
 			</div>
-		{/if} -->
+		{/if}
 
 		<!-- oninput={handleInput} -->
 		<div
-			bind:this={contentEditableElement}
-			contenteditable="true"
-			role="textbox"
-			aria-multiline="true"
-			tabindex="0"
+			bind:this={taskInputElement}
+			contenteditable="false"
 			class="textarea taskinput-textarea inset-0"
-			onkeydown={handleKeydown}
 			style="min-height: 3.5rem; padding: 1rem 0.75rem; word-wrap: break-word; overflow-wrap: break-word; white-space: pre-wrap;"
 		>
-			{#each chunks as chunk, i}
-				<div contenteditable="true" class="{chunk.type === 'text' ? 'text-chip' : 'tag-chip'}" bind:innerHTML={chunk.content}></div>
+			{#each chunks as chunk, i (i)}
+				<div 
+				  data-item-id={i}
+					bind:innerHTML={chunk.content}
+					contenteditable="true"
+					class="{chunk.type}-chip" 
+					role="textbox"
+					tabindex={i}
+					transition:scale={{ duration: 50 }}
+					onkeydown={handleKeydown}
+					onkeyup={(e) => {
+						if(i > 0 && (chunks[i].content.length === 0 || chunk.content === '<br>')) {
+							console.log("CURRENT NODE " + currentNode?.outerHTML);
+							if(currentNode?.previousElementSibling) {
+									//alert("set pos to next sib"+ currentNode.nextSibling.parentElement?.outerHTML);
+									window.getSelection()?.setPosition(currentNode.previousElementSibling, 1);
+									//updateCurrentNode();
+								}
+							chunks.splice(i, 1);
+							//setTimeout(() => {
+							// console.log("current node: " + currentNode?.outerHTML);
+							// console.log("parent node: " + currentNode?.parentElement?.outerHTML);
+							// console.log("uhhh " + currentNode?.nextElementSibling?.outerHTML);
+						//}, 0);
+						}
+						// console.log('Updated chunk', i, chunks[i].content);
+						// 	console.log("selection after: ", sel?.anchorNode?.textContent);
+						// 	console.log("index: ", sel?.anchorOffset);
+						// 	console.log("set selection to " + sel?.anchorNode?.textContent + " at " + ((sel?.anchorOffset || 0) - 1));
+
+
+						// setTimeout(() => {
+						// 	console.log("selection at set: ", sel?.anchorNode?.textContent);
+						// 	console.log("index: ", sel?.anchorOffset);
+						// 	if(node)
+						// 		window.getSelection()?.setPosition(node, index);
+						// }, 0);
+						}}>
+					</div>
 			{/each}
 		</div>
 	</div>
@@ -290,6 +289,11 @@
 
 	.sidebar-layout {
 		align-items: flex-start;
+	}
+
+	.text-chip, .tag-chip {
+		display: inline-block;
+		vertical-align: baseline;
 	}
 
 	.tag-chip-animate {
