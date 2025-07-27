@@ -2,21 +2,21 @@ import { getJunctionsCollection, getNodesCollection, graphNodeConverter, tagConv
 import { addDoc, doc, DocumentReference, getDocs, getDocsFromCache, query, Timestamp, updateDoc, where } from 'firebase/firestore';
 
 export async function addTask(chunks: {
-    type: string;
     content: string;
+    type: () => 'text' | 'tag';
 }[]) {
   let task = '' as string;
   let tags = [] as string[];
 
   for (const chunk of chunks) {
     console.log(chunk.type, chunk.content);
-    if (chunk.type === 'tag-inline' || chunk.type === 'tag-meta') {
-      if(chunk.type === 'tag-inline') {
-        task += chunk.content;
-      } 
+    if (chunk.type() === 'tag') {
+      // if(chunk.type === 'tag') {
+      //   task += chunk.content;
+      // } 
       tags.push(chunk.content.substring(1)); // Remove the leading '#' or '/'
       console.log('Found tag:', chunk.content);
-    } else if (chunk.type === 'text' || chunk.type === 'separator') {
+    } else if (chunk.type() === 'text') {
       task += chunk.content;
     }
   }

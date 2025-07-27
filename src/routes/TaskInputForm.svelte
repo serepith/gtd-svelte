@@ -2,6 +2,7 @@
 	import { addTask } from '$lib/database';
 	import { firebase } from '$lib/globalState.svelte';
 	import { tick } from 'svelte';
+	import { fade, scale } from 'svelte/transition';
 
 	// Space character for tag boundaries
 	//const SEPARATOR_SPACE = '\u2002';
@@ -11,27 +12,32 @@
 	
 	let taskInputElement: HTMLDivElement | null = null;
 
-	// class Chunk {
-	// 	content: string;
-	// 	type: 'text' | 'tag';
+	export class Chunk2 {
+		content: string;
+		type = () => {
+			return this.content.includes('#') ? 'tag' : 'text';
+		};
 
-	// 	constructor(ctn?: string, typ?: 'text' | 'tag') {
-	// 		this.content = $state.raw(ctn || '');
-	// 		this.type = typ || 'text';
-	// 	}
-	// }
+		constructor(ctn?: string, typ?: 'text' | 'tag') {
+			this.content = $state(ctn || '');
+		}
+	}
 
 	//const chunk = (content?: string, type?: 'text' | 'tag') => new Chunk(content, type);
 
-	const chunk = (content: string = '', type: 'text' | 'tag' = 'text') => {
-		let c = $state.raw({ content, type });
+	const chunk = (content: string = '', type = () => content.includes('#') ? 'tag' : 'text') => {
+		let t = $derived(content.includes('#'));
+		let c = { content, type };
 		return c;
 	}
 
-	//type Chunk = { content: $state.raw(string), type: 'text' | 'tag' };
+	type Chunk = { content: string, type: 'text' | 'tag' };
 
 	let chunks = $state([chunk('ttt')]);
-	$inspect(chunks).with(console.log);
+
+	let chunkTypes = $derived(chunks.map(chunk => 
+			chunk.content.startsWith('#') ? 'tag' : 'text'
+		));
 
 	function getCurrentNode() {
 		return window.getSelection()?.anchorNode?.parentElement;
@@ -47,8 +53,56 @@
 	}
 
 	let currentNode = $state(window.getSelection()?.anchorNode?.parentElement);
+	let currentNodeTextPosition = $state(window.getSelection()?.anchorOffset);
+	let currentNodeIndex = $derived(parseInt(currentNode?.dataset.itemId || '0'));
+	let currentChunk = $derived(chunks[currentNodeIndex]);
 
-	let currentChunk = $state(chunks[0]);
+	
+	$inspect(chunks).with(console.log);
+	$inspect(currentNodeIndex).with(console.log);
+	$inspect(currentChunk).with(console.log);
+	$inspect(currentNodeTextPosition).with(console.log);
+
+	// claude code
+	$effect(() => {
+		//console.log("cleanup");
+		let merged = [];
+		let i = 0;
+		let mergedNodeIndex;
+		
+		for (let i = chunks.length - 1; i > 0; i--) {
+			if (chunkTypes[i] === 'text' && chunkTypes[i - 1] === 'text') {
+				let newFocus;
+				let newFocusOffset : number;
+
+				// If we're deleting the active chunk, move cursor to previous
+				if (i === currentNodeIndex) {
+					console.log("i=" + i + " current node ndex " + currentNodeIndex);
+					newFocus = i-1;
+					newFocusOffset = chunks[i - 1].content.length;
+				}
+				
+				chunks[i - 1].content += chunks[i].content;
+				chunks.splice(i, 1);
+
+				console.log("new focus wtf " + newFocus);
+
+				if(newFocus != undefined) {
+					// set timeout so the DOM will update first
+					setTimeout(() => {
+						//console.log("NEW FOCUS index " + (i-1));
+						let newFocusElement = taskInputElement?.querySelector(`[data-item-id="${i-1}"]`);
+						//console.log("NEW FOCUS " + newFocusElement?.outerHTML);
+						// set focus to the text so we can put the cursor in the proper location
+						if(newFocusElement)
+							window.getSelection()?.setPosition(newFocusElement.firstChild, newFocusOffset);
+					}, 0);
+				}
+			}
+  	}
+		
+	});
+	
 
 	function isInTag(): boolean {
 		if(currentNode?.classList)
@@ -79,7 +133,9 @@
 				return;
 			}
 			else if (event.key === 'Backspace') {
-				// TODO: how to link chunks to DOM?
+				// if(currentNode?.dataset && currentNode?.dataset.itemId) {
+				// 	(chunks[parseInt(currentNode.dataset.itemId)]).type() = 'text';
+				// }
 			}
 		}
 
@@ -91,13 +147,23 @@
         return;
       }
 
-			chunks.push(chunk('#', 'tag'));
-				//insertCharacterAtCursor(event.key);
-			// alert(currentNode);
-			// alert(currentNode?.nextSibling);
+			const nodeText = currentNode?.textContent;
 
-			// await tick();
-			// await tick();
+			const textBeforeCursor = nodeText?.substring(0, currentNodeTextPosition) || '';
+			const textAfterCursor = nodeText?.substring(currentNodeTextPosition || nodeText?.length);
+
+			console.log("substring 1: " + textBeforeCursor);
+			console.log("substring 2: " + textAfterCursor);
+
+			currentChunk.content += ' ';
+
+			currentChunk.content = textBeforeCursor;
+			//chunks.push(chunk('#' + textAfterCursor));
+			chunks.splice(currentNodeIndex + 1, 0, chunk('#' + textAfterCursor));
+			//chunks.push(chunk('#'));
+
+			if(currentNodeTextPosition)
+				currentNodeTextPosition = (currentNodeTextPosition - textBeforeCursor.length + 1);
 
 			setTimeout(() => {
 				console.log("current node: " + currentNode?.outerHTML);
@@ -140,16 +206,6 @@
 		//console.log('Cursor position after check: ', getCursorPosition());
 	}
 
-	// Handle input from contenteditable
-	// function handleInput(event: Event) {
-	// 	console.log("HANDLE INPUT");
-
-	// 	const target = event.target as HTMLDivElement;
-	// 	//taskText = target.textContent || '';
-
-	// 	// Update saved cursor position after input
-	// 	//savedCursorPos = getCursorPosition();
-	// }
 
 	// Auto-resize the contenteditable
 	// function resizeContentEditable(element: HTMLDivElement) {
@@ -170,46 +226,50 @@
 	// 	}
 	// });
 
+	function taskTextEmpty() {
+		return chunks.length === 1 && (chunks[0].content.length === 0 || chunks[0].content === '<br>');
+	}
+
 	// Handle form submission
-	// function handleSubmit(event: Event) {
-	// 	console.log("HANDLE SUBMIT");
+	function handleSubmit(event: Event) {
+		console.log("HANDLE SUBMIT");
 
-	// 	event.preventDefault();
+		event.preventDefault();
 
-	// 	if (!firebase.user) {
-	// 		alert('Please log in to add a task.');
-	// 		return;
-	// 	}
+		if (!firebase.user) {
+			alert('Please log in to add a task.');
+			return;
+		}
 
-	// 	if (taskText.trim()) {
-  //     console.log(chunks);
-	// 		addTask(chunks);
-	// 		taskText = '';
-	// 		if (contentEditableElement) {
-	// 			contentEditableElement.innerHTML = '';
-	// 		}
-	// 	}
-	// }
-
-	// Sync taskText changes back to contenteditable (for when we clear it)
-	// $effect(() => {
-	// 	console.log("TASKTEXT EFFECT");
-
-	// 	if (contentEditableElement && !taskText && contentEditableElement.innerHTML !== '') {
-	// 		contentEditableElement.innerHTML = '';
-	// 	}
-	// });
+		if (!taskTextEmpty()) {
+      console.log(chunks);
+			addTask(chunks);
+			chunks = [];
+		}
+	}
 
 	function updateCurrentNode() {
-		console.log("current node " + window.getSelection()?.anchorNode?.textContent);
-		console.log("parent node " + window.getSelection()?.anchorNode?.parentElement?.outerHTML);
+		// console.log("current node " + window.getSelection()?.anchorNode?.textContent);
+		// console.log("parent node " + window.getSelection()?.anchorNode?.parentElement?.outerHTML);
 
-		// node t
-		if(window.getSelection()?.anchorNode?.nodeType === 3)
-			currentNode = window.getSelection()?.anchorNode?.parentElement;
+		let lastCurrentNodeIndex = currentNodeIndex;
 
-		else if(window.getSelection()?.anchorNode?.nodeType === 1)
-			currentNode = window.getSelection()?.anchorNode as HTMLElement;
+		console.log("current node index " + currentNodeIndex + "\n chunks length " + chunks.length);
+
+		
+			// node type 3 is text
+			if(window.getSelection()?.anchorNode?.nodeType === 3)
+				currentNode = window.getSelection()?.anchorNode?.parentElement;
+
+			// 1 is element
+			else if(window.getSelection()?.anchorNode?.nodeType === 1)
+				currentNode = window.getSelection()?.anchorNode as HTMLElement;
+
+			if(window.getSelection()?.anchorOffset)
+				currentNodeTextPosition = window.getSelection()?.anchorOffset;
+		
+
+		
 	}
 </script>
 
@@ -220,7 +280,7 @@
 	<!-- Normal mode: stacked layout -->
 	<div class="relative mb-4 min-w-3xs items-center">
 		<!-- Placeholder overlay -->
-		<!-- {#if !taskText.trim()}
+		{#if taskTextEmpty()}
 			<div
 				class="textarea pointer-events-none absolute inset-0
 				bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary"
@@ -228,35 +288,26 @@
 			>
 				What's on your mind?
 			</div>
-		{/if} -->
+		{/if}
 
 		<!-- oninput={handleInput} -->
 		<div
 			bind:this={taskInputElement}
-			onchangecapture={() =>{ console.log("change capture"); }}
 			contenteditable="false"
 			class="textarea taskinput-textarea inset-0"
 			style="min-height: 3.5rem; padding: 1rem 0.75rem; word-wrap: break-word; overflow-wrap: break-word; white-space: pre-wrap;"
 		>
 			{#each chunks as chunk, i (i)}
 				<div 
+				  data-item-id={i}
 					bind:innerHTML={chunk.content}
-					contenteditable="true" 
-					class="{chunk.type === 'text' ? 'text-chip' : 'tag-chip'}" 
+					contenteditable="true"
+					class="{chunkTypes[i]}-chip" 
 					role="textbox"
 					tabindex={i}
+					transition:scale={{ duration: 50 }}
 					onkeydown={handleKeydown}
 					onkeyup={(e) => {
-						//const sel = window.getSelection();
-						//const node = sel?.anchorNode;
-						//const index = sel?.anchorOffset;
-						
-						// console.log("selection before: ", sel?.anchorNode?.textContent);
-						// console.log("index: ", sel?.anchorOffset);
-						
-
-						//chunks[i].content = (e.target as HTMLDivElement)?.textContent || '';
-						//console.log("length: " + chunks[i].content.length)
 						if(i > 0 && (chunks[i].content.length === 0 || chunk.content === '<br>')) {
 							console.log("CURRENT NODE " + currentNode?.outerHTML);
 							if(currentNode?.previousElementSibling) {
@@ -307,6 +358,12 @@
 
 	.sidebar-layout {
 		align-items: flex-start;
+	}
+
+	.text-chip, .tag-chip {
+		display: inline-block;
+		vertical-align: baseline;
+		margin-inline: 0.125rem;
 	}
 
 	.tag-chip-animate {
