@@ -2,7 +2,6 @@
 	import { addTask } from '$lib/database';
 	import { firebase } from '$lib/globalState.svelte';
 	import { tick } from 'svelte';
-	import { fade, scale } from 'svelte/transition';
 
 	// Space character for tag boundaries
 	//const SEPARATOR_SPACE = '\u2002';
@@ -12,26 +11,27 @@
 	
 	let taskInputElement: HTMLDivElement | null = null;
 
-	class Chunk2 {
-		content: string;
-		type: 'text' | 'tag';
+	// class Chunk {
+	// 	content: string;
+	// 	type: 'text' | 'tag';
 
-		constructor(ctn?: string, typ?: 'text' | 'tag') {
-			this.content = $state(ctn || '');
-			this.type = $derived(this.content.includes('#') ? 'tag' : 'text');
-		}
-	}
+	// 	constructor(ctn?: string, typ?: 'text' | 'tag') {
+	// 		this.content = $state.raw(ctn || '');
+	// 		this.type = typ || 'text';
+	// 	}
+	// }
 
 	//const chunk = (content?: string, type?: 'text' | 'tag') => new Chunk(content, type);
 
 	const chunk = (content: string = '', type: 'text' | 'tag' = 'text') => {
-		let c = { content, type };
+		let c = $state.raw({ content, type });
 		return c;
 	}
 
-	type Chunk = { content: string, type: 'text' | 'tag' };
+	//type Chunk = { content: $state.raw(string), type: 'text' | 'tag' };
 
-	let chunks = $state([new Chunk2('ttt')]);
+	let chunks = $state([chunk('ttt')]);
+	$inspect(chunks).with(console.log);
 
 	function getCurrentNode() {
 		return window.getSelection()?.anchorNode?.parentElement;
@@ -47,14 +47,8 @@
 	}
 
 	let currentNode = $state(window.getSelection()?.anchorNode?.parentElement);
-	let currentPosition = $state(window.getSelection()?.anchorOffset);
-	let currentChunk = $derived(chunks[parseInt(currentNode?.dataset.itemId || '0')]);
 
-	
-	$inspect(chunks).with(console.log);
-	$inspect(currentChunk).with(console.log);
-	$inspect(currentPosition).with(console.log);
-	
+	let currentChunk = $state(chunks[0]);
 
 	function isInTag(): boolean {
 		if(currentNode?.classList)
@@ -85,9 +79,7 @@
 				return;
 			}
 			else if (event.key === 'Backspace') {
-				if(currentNode?.dataset && currentNode?.dataset.itemId) {
-					(chunks[parseInt(currentNode.dataset.itemId)]).type = 'text';
-				}
+				// TODO: how to link chunks to DOM?
 			}
 		}
 
@@ -99,11 +91,13 @@
         return;
       }
 
-			const nodeText = currentNode?.textContent;
-			currentChunk.content += ' ';
-			//currentChunk.content = nodeText?.substring(0, currentPosition) || '';
-			//chunks.push(new Chunk2('#' + ((nodeText && currentPosition) ? nodeText.substring(currentPosition) : '')));
-			chunks.push(new Chunk2('#'));
+			chunks.push(chunk('#', 'tag'));
+				//insertCharacterAtCursor(event.key);
+			// alert(currentNode);
+			// alert(currentNode?.nextSibling);
+
+			// await tick();
+			// await tick();
 
 			setTimeout(() => {
 				console.log("current node: " + currentNode?.outerHTML);
@@ -146,6 +140,16 @@
 		//console.log('Cursor position after check: ', getCursorPosition());
 	}
 
+	// Handle input from contenteditable
+	// function handleInput(event: Event) {
+	// 	console.log("HANDLE INPUT");
+
+	// 	const target = event.target as HTMLDivElement;
+	// 	//taskText = target.textContent || '';
+
+	// 	// Update saved cursor position after input
+	// 	//savedCursorPos = getCursorPosition();
+	// }
 
 	// Auto-resize the contenteditable
 	// function resizeContentEditable(element: HTMLDivElement) {
@@ -166,41 +170,46 @@
 	// 	}
 	// });
 
-	function taskTextEmpty() {
-		return chunks.length === 1 && (chunks[0].content.length === 0 || chunks[0].content === '<br>');
-	}
-
 	// Handle form submission
-	function handleSubmit(event: Event) {
-		console.log("HANDLE SUBMIT");
+	// function handleSubmit(event: Event) {
+	// 	console.log("HANDLE SUBMIT");
 
-		event.preventDefault();
+	// 	event.preventDefault();
 
-		if (!firebase.user) {
-			alert('Please log in to add a task.');
-			return;
-		}
+	// 	if (!firebase.user) {
+	// 		alert('Please log in to add a task.');
+	// 		return;
+	// 	}
 
-		if (!taskTextEmpty()) {
-      console.log(chunks);
-			addTask(chunks);
-			chunks = [];
-		}
-	}
+	// 	if (taskText.trim()) {
+  //     console.log(chunks);
+	// 		addTask(chunks);
+	// 		taskText = '';
+	// 		if (contentEditableElement) {
+	// 			contentEditableElement.innerHTML = '';
+	// 		}
+	// 	}
+	// }
+
+	// Sync taskText changes back to contenteditable (for when we clear it)
+	// $effect(() => {
+	// 	console.log("TASKTEXT EFFECT");
+
+	// 	if (contentEditableElement && !taskText && contentEditableElement.innerHTML !== '') {
+	// 		contentEditableElement.innerHTML = '';
+	// 	}
+	// });
 
 	function updateCurrentNode() {
-		// console.log("current node " + window.getSelection()?.anchorNode?.textContent);
-		// console.log("parent node " + window.getSelection()?.anchorNode?.parentElement?.outerHTML);
+		console.log("current node " + window.getSelection()?.anchorNode?.textContent);
+		console.log("parent node " + window.getSelection()?.anchorNode?.parentElement?.outerHTML);
 
-		// node type 3 is text
+		// node t
 		if(window.getSelection()?.anchorNode?.nodeType === 3)
 			currentNode = window.getSelection()?.anchorNode?.parentElement;
 
-		// 2 is element
 		else if(window.getSelection()?.anchorNode?.nodeType === 1)
 			currentNode = window.getSelection()?.anchorNode as HTMLElement;
-
-		currentPosition = window.getSelection()?.anchorOffset;
 	}
 </script>
 
@@ -211,7 +220,7 @@
 	<!-- Normal mode: stacked layout -->
 	<div class="relative mb-4 min-w-3xs items-center">
 		<!-- Placeholder overlay -->
-		{#if taskTextEmpty()}
+		<!-- {#if !taskText.trim()}
 			<div
 				class="textarea pointer-events-none absolute inset-0
 				bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary"
@@ -219,26 +228,35 @@
 			>
 				What's on your mind?
 			</div>
-		{/if}
+		{/if} -->
 
 		<!-- oninput={handleInput} -->
 		<div
 			bind:this={taskInputElement}
+			onchangecapture={() =>{ console.log("change capture"); }}
 			contenteditable="false"
 			class="textarea taskinput-textarea inset-0"
 			style="min-height: 3.5rem; padding: 1rem 0.75rem; word-wrap: break-word; overflow-wrap: break-word; white-space: pre-wrap;"
 		>
 			{#each chunks as chunk, i (i)}
 				<div 
-				  data-item-id={i}
 					bind:innerHTML={chunk.content}
-					contenteditable="true"
-					class="{chunk.type}-chip" 
+					contenteditable="true" 
+					class="{chunk.type === 'text' ? 'text-chip' : 'tag-chip'}" 
 					role="textbox"
 					tabindex={i}
-					transition:scale={{ duration: 50 }}
 					onkeydown={handleKeydown}
 					onkeyup={(e) => {
+						//const sel = window.getSelection();
+						//const node = sel?.anchorNode;
+						//const index = sel?.anchorOffset;
+						
+						// console.log("selection before: ", sel?.anchorNode?.textContent);
+						// console.log("index: ", sel?.anchorOffset);
+						
+
+						//chunks[i].content = (e.target as HTMLDivElement)?.textContent || '';
+						//console.log("length: " + chunks[i].content.length)
 						if(i > 0 && (chunks[i].content.length === 0 || chunk.content === '<br>')) {
 							console.log("CURRENT NODE " + currentNode?.outerHTML);
 							if(currentNode?.previousElementSibling) {
@@ -289,11 +307,6 @@
 
 	.sidebar-layout {
 		align-items: flex-start;
-	}
-
-	.text-chip, .tag-chip {
-		display: inline-block;
-		vertical-align: baseline;
 	}
 
 	.tag-chip-animate {
