@@ -153,3 +153,14 @@ button:focus:not(:focus-visible) {
 	width: 1px;
 	white-space: nowrap;
 }
+
+.tag-chip {
+    background-color: var(--color-primary);
+    color: var(--color-primary-content);
+    padding: 0.125rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    border: none;
+    cursor: default;
+  }
