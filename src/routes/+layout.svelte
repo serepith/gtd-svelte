@@ -13,7 +13,7 @@
 	<Header />
 
 	<section class="flex flex-col flex-1 gap-5 p-5">
-		<div class="grid grid-cols-1 place-items-center-safe flex-1
+		<div class="grid place-items-center-safe flex-1
 		focus-within:outline-none border-none">
 			<TaskInputForm bind:isSidebar />
 		</div>

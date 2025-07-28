@@ -1,5 +1,3 @@
-// /tag/[slug]/+page.svelte
-
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
@@ -131,8 +129,8 @@
 	<title>#{tagName} - Tasks</title>
 </svelte:head>
 
-<section class="p-4">
-	<div class="max-w-4xl mx-auto">
+<section class="p-4 flex-1">
+	<div class="max-w-4xl mx-auto flex flex-col flex-1">
 		<!-- Header -->
 		<div class="flex items-center justify-between mb-6">
 			<h1 class="text-3xl font-bold">

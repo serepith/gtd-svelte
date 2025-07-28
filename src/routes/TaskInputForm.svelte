@@ -39,9 +39,15 @@
 			chunk.content.startsWith('#') ? 'tag' : 'text'
 		));
 
-	function getCurrentNode() {
-		return window.getSelection()?.anchorNode?.parentElement;
-	}
+	// function getLastChild() {
+	// 	// node type 3 is text
+	// 		// if(taskInputElement?.lastChild?.nodeType === 3)
+	// 		// 	return taskInputElement?.lastChild?.parentElement;
+
+	// 		// // 1 is element
+	// 		// else if(taskInputElement?.lastChild?.nodeType === 1)
+	// 		// 	return taskInputElement?.lastChild as HTMLElement;
+	// }
 
 	function getPrecedingChar() {
 		let sel = window.getSelection();
@@ -85,8 +91,10 @@
 				let newFocusElement = taskInputElement?.querySelector(`[data-item-id="${i-1}"]`);
 				//console.log("NEW FOCUS " + newFocusElement?.outerHTML);
 				// set focus to the text so we can put the cursor in the proper location
-				if(newFocusElement)
+				if(newFocusElement) {
+					(newFocusElement as HTMLElement).focus();
 					window.getSelection()?.setPosition(newFocusElement.firstChild, newFocusOffset);
+				}
 			}, 0);
 		}
 	}
@@ -96,11 +104,15 @@
 		let merged = [];
 		let i = 0;
 		let mergedNodeIndex;
-		
+
 		for (let i = chunks.length - 1; i > 0; i--) {
 			if (chunkTypes[i] === 'text' && chunkTypes[i - 1] === 'text') {
-				
 				chunks[i - 1].content += chunks[i].content;
+				spliceOutChunk(i);
+			}
+			// don't delete the current node or the last/only node
+			else if (chunks[i].content.length === 0 && i != currentNodeIndex && i != chunks.length - 1) {
+				console.log('i ' + i + ' current ndoe index ' + currentNodeIndex);
 				spliceOutChunk(i);
 			}
   	}
@@ -115,12 +127,38 @@
 	function wouldCreateInvalidPair(key: string): boolean {
 		if (key !== '#' && key !== '/') return false;
 
-		//alert(getPrecedingChar());
-		//alert(getCurrentNode()?.outerHTML);
 		if(getPrecedingChar() === '#')
 			return true;
 
 		return false;
+	}
+
+	function addChunk(type: 'text' | 'tag') {
+		updateCurrentNode();
+
+		if(!currentNode) {
+			currentNode = taskInputElement?.lastElementChild as HTMLElement;
+			currentNodeTextPosition = currentNode.textContent?.length;
+		}
+
+		const newChunkText = (type === 'tag') ? '#' : '';
+		const nodeText = currentNode?.textContent;
+
+		const textBeforeCursor = nodeText?.substring(0, currentNodeTextPosition) || '';
+		const textAfterCursor = nodeText?.substring(currentNodeTextPosition || nodeText?.length);
+
+		currentChunk.content = textBeforeCursor;
+		chunks.splice(currentNodeIndex + 1, 0, chunk(newChunkText + textAfterCursor));
+
+		if(currentNodeTextPosition)
+			currentNodeTextPosition = (currentNodeTextPosition - textBeforeCursor.length + newChunkText.length);
+
+		setTimeout(() => {
+			if(currentNode?.nextElementSibling) {
+					(currentNode.nextElementSibling as HTMLElement).focus();
+					window.getSelection()?.setPosition(currentNode.nextElementSibling, newChunkText.length);
+				}
+		}, 0);
 	}
 
 	// Handle keyboard events
@@ -158,6 +196,7 @@
 				// console.log("uhhh " + currentNode?.nextElementSibling?.outerHTML);
 				if(currentNode?.nextElementSibling) {
 						//alert("set pos to next sib"+ currentNode.nextSibling.parentElement?.outerHTML);
+						(currentNode.nextElementSibling as HTMLElement).focus();
 						window.getSelection()?.setPosition(currentNode.nextElementSibling, 1);
 						//updateCurrentNode();
 					}
@@ -196,7 +235,9 @@
 				// console.log("parent node: " + currentNode?.parentElement?.outerHTML);
 				// console.log("uhhh " + currentNode?.nextElementSibling?.outerHTML);
 				if(currentNode?.nextElementSibling) {
+						console.log("SET TO " + (currentNode.nextElementSibling as HTMLElement).outerHTML);
 						//alert("set pos to next sib"+ currentNode.nextSibling.parentElement?.outerHTML);
+						(currentNode.nextElementSibling as HTMLElement).focus();
 						window.getSelection()?.setPosition(currentNode.nextElementSibling, 0);
 						//updateCurrentNode();
 					}
@@ -214,7 +255,91 @@
 		//console.log('Cursor position after check: ', getCursorPosition());
 	}
 
+	function handleOnclick(event: MouseEvent) {
+		console.log("this element is: " + (event.target as HTMLElement).outerHTML);
 
+		// Don't do anything if user clicked on a child div
+		if ((event.target as HTMLElement) != taskInputElement) {
+			console.log("different target");
+			 return;
+		}
+
+
+		event.preventDefault();
+
+		let closestChild = findClosestChild(event.clientX, event.clientY, Array.from(taskInputElement.children) as HTMLElement[]);
+
+		//console.log(closestChild.outerHTML);
+
+		// Create synthetic click event for the child
+		const childRect = closestChild.getBoundingClientRect();
+
+		// Keep coordinates that are within bounds, clamp others
+		const clampedX = event.clientX > childRect.left && event.clientX < childRect.right 
+			? event.clientX  // Keep original if within bounds
+			: Math.max(childRect.left, Math.min(childRect.right, event.clientX)); // Clamp if outside
+
+		const clampedY = event.clientY > childRect.top && event.clientY < childRect.bottom
+			? event.clientY  // Keep original if within bounds  
+			: Math.max(childRect.top, Math.min(childRect.bottom, event.clientY)); // Clamp if outside
+
+			console.log("x " + clampedX + " y " + clampedY);
+
+		//closestChild.focus();
+
+		// Just focus and position cursor manually
+		closestChild.focus();
+
+		// Use caretPositionFromPoint or caretRangeFromPoint
+		const position = document.caretPositionFromPoint?.(clampedX, clampedY) || 
+										document.caretRangeFromPoint?.(clampedX, clampedY);
+
+		if (position) {
+			const selection = window.getSelection();
+			selection?.removeAllRanges();
+			
+			if ('offsetNode' in position) {
+				// caretPositionFromPoint result
+				const range = document.createRange();
+				range.setStart(position.offsetNode, position.offset);
+				range.collapse(true);
+				selection?.addRange(range);
+			} else {
+				// caretRangeFromPoint result
+				selection?.addRange(position);
+			}
+		}
+
+		// let lastChild = taskInputElement?.lastElementChild;
+		// console.log("active element " + document.activeElement?.outerHTML);
+		// if(lastChild && document.activeElement != lastChild)
+		// 	(lastChild as HTMLElement).focus();
+
+		// event.preventDefault();
+  
+		// console.log("last child " + taskInputElement?.lastElementChild?.outerHTML);
+		// console.log("last child text " + taskInputElement?.lastElementChild?.firstChild?.textContent);
+		
+		// if(lastChild) {
+		// 	if(document.activeElement != lastChild)
+		// 		(lastChild as HTMLElement).focus();
+
+		// 	const selection = window.getSelection();
+		// 	const currentRange = selection?.rangeCount ? selection.getRangeAt(0) : null;
+			
+		// 	// Create the desired range
+		// 	const newRange = document.createRange();
+		// 	newRange.selectNodeContents(lastChild);
+		// 	newRange.collapse(false);
+			
+		// 	// Only update if different
+		// 	if (!currentRange || !currentRange.isPointInRange(newRange.startContainer, newRange.startOffset)) {
+		// 		console.log("adjusting range");
+		// 		selection?.removeAllRanges();
+		// 		selection?.addRange(newRange);
+		// 	}
+		// }
+	}
 	// Auto-resize the contenteditable
 	// function resizeContentEditable(element: HTMLDivElement) {
 	// 	console.log("RESIZE EDITABLE");
@@ -234,7 +359,77 @@
 	// 	}
 	// });
 
+	interface ChildRect {
+		child: HTMLElement;
+		rect: DOMRect;
+	}
+
+	function findClosestChild(clickX: number, clickY: number, children: HTMLElement[]): HTMLElement {
+		// Get all bounding rectangles
+		const rects: ChildRect[] = children.map(child => ({
+			child,
+			rect: child.getBoundingClientRect()
+		}));
+		
+		// Find children that overlap in each dimension
+		const xOverlap: ChildRect[] = rects.filter(({rect}) => 
+			clickX >= rect.left && clickX <= rect.right
+		);
+		const yOverlap: ChildRect[] = rects.filter(({rect}) => 
+			clickY >= rect.top && clickY <= rect.bottom
+		);
+		
+		// Case 1: Within both dimensions (shouldn't happen if parent was clicked)
+		const bothOverlap: ChildRect[] = xOverlap.filter(item => yOverlap.includes(item));
+		if (bothOverlap.length > 0) return bothOverlap[0].child;
+		
+		// Case 2: Within Y bounds, choose closest X
+		if (yOverlap.length > 0) {
+			return yOverlap.reduce((closest: ChildRect, current: ChildRect): ChildRect => {
+				const closestDist = Math.min(
+					Math.abs(clickX - closest.rect.left),
+					Math.abs(clickX - closest.rect.right)
+				);
+				const currentDist = Math.min(
+					Math.abs(clickX - current.rect.left),
+					Math.abs(clickX - current.rect.right)
+				);
+				return currentDist < closestDist ? current : closest;
+			}).child;
+		}
+		
+		// Case 3: Within X bounds, choose closest Y
+		if (xOverlap.length > 0) {
+			return xOverlap.reduce((closest: ChildRect, current: ChildRect): ChildRect => {
+				const closestDist = Math.min(
+					Math.abs(clickY - closest.rect.top),
+					Math.abs(clickY - closest.rect.bottom)
+				);
+				const currentDist = Math.min(
+					Math.abs(clickY - current.rect.top),
+					Math.abs(clickY - current.rect.bottom)
+				);
+				return currentDist < closestDist ? current : closest;
+			}).child;
+		}
+		
+		// Case 4: In corners - use actual 2D distance to nearest edge
+		return rects.reduce((closest: ChildRect, current: ChildRect): ChildRect => {
+			const closestDist = distanceToRect(clickX, clickY, closest.rect);
+			const currentDist = distanceToRect(clickX, clickY, current.rect);
+			return currentDist < closestDist ? current : closest;
+		}).child;
+	}
+
+	function distanceToRect(x: number, y: number, rect: DOMRect): number {
+		const dx = Math.max(rect.left - x, 0, x - rect.right);
+		const dy = Math.max(rect.top - y, 0, y - rect.bottom);
+		return Math.sqrt(dx * dx + dy * dy);
+	}
+
 	function taskTextEmpty() {
+		console.log(chunks.length);
+		console.log(chunks[0].content.length);
 		return chunks.length === 1 && (chunks[0].content.length === 0 || chunks[0].content === '<br>');
 	}
 
@@ -284,9 +479,9 @@
 
 <svelte:document />
 <!-- onsubmit={handleSubmit} -->
-<form class="justify-items-center grid grid-cols-1" class:sidebar-form={isSidebar}>
+<form class="flex justify-items-center {isSidebar ? 'flex flex-row items-center' : 'flex flex-col items-center'}">
 	<!-- Normal mode: stacked layout -->
-	<div class="relative mb-4 min-w-3xs items-center">
+	<div class="relative m-2 min-w-3xs items-center">
 		<!-- Placeholder overlay -->
 		{#if taskTextEmpty()}
 			<div
@@ -302,6 +497,8 @@
 		<div
 			bind:this={taskInputElement}
 			contenteditable="false"
+			role="group"
+			onmousedown={handleOnclick}
 			class="textarea taskinput-textarea inset-0"
 			style="min-height: 3.5rem; padding: 1rem 0.75rem; word-wrap: break-word; overflow-wrap: break-word; white-space: pre-wrap;"
 		>
@@ -312,7 +509,7 @@
 					contenteditable="true"
 					class="{chunkTypes[i]}-chip" 
 					role="textbox"
-					tabindex={i}
+					tabindex={0}
 					transition:scale={{ duration: 50 }}
 					onkeydown={handleKeydown}
 					onkeyup={(e) => {
@@ -348,7 +545,7 @@
 		</div>
 	</div>
 
-	<button type="submit" class="btn btn-soft btn-lg" class:btn-disabled={!firebase.user}
+	<button type="submit" class="m-2 btn btn-soft btn-lg" class:btn-disabled={!firebase.user}
 		>Submit</button
 	>
 	<!-- {/if} -->
@@ -359,9 +556,14 @@
 		outline: none;
 	}
 
+	.task-input-form {
+		grid-template-columns: 1;
+	}
+
 	.sidebar-form {
 		width: 100%;
-		justify-items: stretch;
+		grid-template-rows: 1;
+		grid-template-columns: auto;
 	}
 
 	.sidebar-layout {
@@ -371,7 +573,10 @@
 	.text-chip, .tag-chip {
 		display: inline-block;
 		vertical-align: baseline;
-		margin-inline: 0.125rem;
+	}
+
+	.tag-chip {
+		margin-inline: 0.25rem;
 	}
 
 	.tag-chip-animate {
