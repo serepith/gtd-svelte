@@ -97,6 +97,9 @@
 				}
 			}, 0);
 		}
+		else if (i === 0) {
+			addChunk('text');
+		}
 	}
 
 	// claude code -- clean up text chunks whenever chunks updates
@@ -429,7 +432,7 @@
 
 	function taskTextEmpty() {
 		console.log(chunks.length);
-		console.log(chunks[0].content.length);
+		//console.log(chunks[0].content.length);
 		return chunks.length === 1 && (chunks[0].content.length === 0 || chunks[0].content === '<br>');
 	}
 
@@ -447,7 +450,12 @@
 		if (!taskTextEmpty()) {
       console.log(chunks);
 			addTask(chunks);
-			chunks = [];
+			// for(let i = 0; i < chunks.length; i++)
+			// 	chunks.pop();
+			chunks = [chunk('text')];
+			// this is necessary because the key is the index so svelte won't detect a
+			// state change unless we reset the content at index 0
+			chunks[0].content = '';
 		}
 	}
 
@@ -546,8 +554,7 @@
 	</div>
 
 	<button type="submit" class="m-2 btn btn-soft btn-lg" class:btn-disabled={!firebase.user}
-		>Submit</button
-	>
+		>Submit</button>
 	<!-- {/if} -->
 </form>
 
