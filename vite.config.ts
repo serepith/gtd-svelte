@@ -6,6 +6,6 @@ import { defineConfig } from 'vite';
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit(), devtoolsJson()],
 	optimizeDeps: {
-		include: ['@firebase/firestore', '@firebase/app', '@firebase/auth', '@lucide/svelte'],
+		include: ['@firebase/firestore', '@firebase/app', '@firebase/auth', '@lucide/svelte']
 	}
-},);
+});

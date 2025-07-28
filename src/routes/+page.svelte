@@ -2,7 +2,7 @@
 	import { firebase } from '$lib/globalState.svelte';
 	import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 	import TaskInputForm from './TaskInputForm.svelte';
-// $effect(() => {
+	// $effect(() => {
 	// 	$inspect(firebase, 'firebase');
 	// });
 
@@ -12,7 +12,7 @@
 
 	export const snapshot: Snapshot = {
 		capture: () => taskText,
-		restore: (value) => taskText = value
+		restore: (value) => (taskText = value)
 	};
 
 	// Handle login
@@ -34,12 +34,13 @@
 </svelte:head>
 
 <section>
-	<div class="grid grid-cols-1 gap-4 flex-1 items-center justify-items-center-safe" style="min-width: 25%;">
+	<div
+		class="grid flex-1 grid-cols-1 items-center justify-items-center-safe gap-4"
+		style="min-width: 25%;"
+	>
 		{#if !firebase.user}
-			<button class="btn btn-soft btn-lg min-w-sm" onclick={(e) => handleLogin(e)}
-				>Login</button
-			>
-		<!-- {:else}
+			<button class="btn btn-soft btn-lg min-w-sm" onclick={(e) => handleLogin(e)}>Login</button>
+			<!-- {:else}
 			<TaskInputForm bind:taskText></TaskInputForm> -->
 		{/if}
 	</div>

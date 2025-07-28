@@ -1,4 +1,11 @@
-import { PUBLIC_FIREBASE_API_KEY, PUBLIC_FIREBASE_APP_ID, PUBLIC_FIREBASE_AUTH_DOMAIN, PUBLIC_FIREBASE_MESSAGING_SENDER_ID, PUBLIC_FIREBASE_PROJECT_ID, PUBLIC_FIREBASE_STORAGE_BUCKET } from '$env/static/public';
+import {
+	PUBLIC_FIREBASE_API_KEY,
+	PUBLIC_FIREBASE_APP_ID,
+	PUBLIC_FIREBASE_AUTH_DOMAIN,
+	PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+	PUBLIC_FIREBASE_PROJECT_ID,
+	PUBLIC_FIREBASE_STORAGE_BUCKET
+} from '$env/static/public';
 import { initializeApp, type FirebaseApp } from 'firebase/app';
 import { getAuth, type Auth, type User } from 'firebase/auth';
 import {
@@ -54,11 +61,20 @@ const getNodesCollection = () => {
 };
 
 const getJunctionsCollection = () => {
-  if (junctionsCollection) return junctionsCollection; 
-  return null;
+	if (junctionsCollection) return junctionsCollection;
+	return null;
 };
 
-export { collections, firebase, uiState, getJunctionsCollection, getNodesCollection, graphNodeConverter, tagConverter, taskConverter };
+export {
+	collections,
+	firebase,
+	uiState,
+	getJunctionsCollection,
+	getNodesCollection,
+	graphNodeConverter,
+	tagConverter,
+	taskConverter
+};
 
 // pull config from environment variables
 const firebaseConfig = {
@@ -87,7 +103,7 @@ const taskConverter: FirestoreDataConverter<Task> = {
 			updatedAt: node.updatedAt,
 			completed: node.completed,
 			archived: node.archived,
-      type: node.type
+			type: node.type
 		};
 	},
 	fromFirestore: (snapshot: QueryDocumentSnapshot, options: SnapshotOptions): Task => {
@@ -100,31 +116,31 @@ const taskConverter: FirestoreDataConverter<Task> = {
 			updatedAt: data.updatedAt,
 			completed: data.completed || false,
 			archived: data.archived || false,
-      type: data.type
+			type: data.type
 		};
 	}
 };
 
 const tagConverter: FirestoreDataConverter<Tag> = {
-  toFirestore: (tag: Tag): DocumentData => {
-    return {
-      name: tag.name,
-      createdAt: tag.createdAt,
-      updatedAt: tag.updatedAt,
-      type: tag.type
-    };
-  },
-  fromFirestore: (snapshot: QueryDocumentSnapshot, options: SnapshotOptions): Tag => {
-	const data = snapshot.data(options);
-	return {
-	  id: snapshot.id,
-	  name: data.name,
-	  createdAt: data.createdAt,
-	  updatedAt: data.updatedAt,
-    type: data.type
-	} as Tag;  
-}
-}
+	toFirestore: (tag: Tag): DocumentData => {
+		return {
+			name: tag.name,
+			createdAt: tag.createdAt,
+			updatedAt: tag.updatedAt,
+			type: tag.type
+		};
+	},
+	fromFirestore: (snapshot: QueryDocumentSnapshot, options: SnapshotOptions): Tag => {
+		const data = snapshot.data(options);
+		return {
+			id: snapshot.id,
+			name: data.name,
+			createdAt: data.createdAt,
+			updatedAt: data.updatedAt,
+			type: data.type
+		} as Tag;
+	}
+};
 
 const junctionConverter: FirestoreDataConverter<Junction> = {
 	toFirestore: (junction: Junction): DocumentData => {
@@ -151,25 +167,25 @@ const junctionConverter: FirestoreDataConverter<Junction> = {
 
 // TODO implement this
 const graphNodeConverter: FirestoreDataConverter<GraphNode> = {
-  toFirestore: (tag: Tag): DocumentData => {
-    return {
-      name: tag.name,
-      createdAt: tag.createdAt,
-      updatedAt: tag.updatedAt,
-      type: tag.type
-    };
-  },
-  fromFirestore: (snapshot: QueryDocumentSnapshot, options: SnapshotOptions): Tag => {
-	const data = snapshot.data(options);
-	return {
-	  id: snapshot.id,
-	  name: data.name,
-	  createdAt: data.createdAt,
-	  updatedAt: data.updatedAt,
-    type: data.type
-	};
-  }
-}
+	toFirestore: (tag: Tag): DocumentData => {
+		return {
+			name: tag.name,
+			createdAt: tag.createdAt,
+			updatedAt: tag.updatedAt,
+			type: tag.type
+		};
+	},
+	fromFirestore: (snapshot: QueryDocumentSnapshot, options: SnapshotOptions): Tag => {
+		const data = snapshot.data(options);
+		return {
+			id: snapshot.id,
+			name: data.name,
+			createdAt: data.createdAt,
+			updatedAt: data.updatedAt,
+			type: data.type
+		};
+	}
+};
 
 export function initFirebase() {
 	console.log('Initializing Firebase...');
@@ -215,7 +231,6 @@ export function initFirebase() {
 						const map = new Map<string, Junction[]>();
 						// map the junctions to their IDs
 						for (const doc of snapshot.docs) {
-							
 						}
 						collections.junctions = snapshot.docs.map((doc) => {
 							return doc.data() as Junction; // Adjust type as needed

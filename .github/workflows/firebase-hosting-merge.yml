@@ -17,12 +17,12 @@ jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
     steps:
-      - run: rm -rf 
+      - run: rm -rf
       - uses: actions/checkout@v4
       - run: |
-            npm ci && npm run build
-            echo "Build exit code: $?"
-            grep -r "apiKey:" build || echo "config not found"
+          npm ci && npm run build
+          echo "Build exit code: $?"
+          grep -r "apiKey:" build || echo "config not found"
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}

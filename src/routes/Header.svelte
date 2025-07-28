@@ -4,24 +4,24 @@
 	import { uiState, firebase } from '$lib/globalState.svelte';
 	import logo from '$lib/images/svelte-logo.svg';
 	import github from '$lib/images/github.svg';
-	
+
 	function handleTasksClick(e: Event) {
 		e.preventDefault();
-		
+
 		// If coming from homepage and user is logged in, show sidebar
 		if (page.url.pathname === '/' && firebase.user) {
 			uiState.sidebarVisible = true;
 		}
-		
+
 		goto('/tasks');
 	}
-	
+
 	function handleHomeClick(e: Event) {
 		e.preventDefault();
-		
+
 		// Hide sidebar when going to home
 		uiState.sidebarVisible = false;
-		
+
 		goto('/');
 	}
 </script>

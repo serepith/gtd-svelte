@@ -13,19 +13,21 @@
 
 	// Get the task ID from the URL parameter
 	let taskId = $page.params.slug;
-	
+
 	// Find the task in our collections
-	let task = $derived(collections.nodes.find(node => node.id === taskId && node.type === 'task') as Task | undefined);
-	
+	let task = $derived(
+		collections.nodes.find((node) => node.id === taskId && node.type === 'task') as Task | undefined
+	);
+
 	// Editable task properties
 	let editedTaskName = $state('');
 	let editedCompleted = $state(false);
 	let editedArchived = $state(false);
-	
+
 	// Task tags
 	let taskTagsPromise: Promise<Tag[]> = $state(getTagsForTask(taskId));
 	let taskTags: Tag[] = $state([]);
-	
+
 	// Initialize editable fields when task is loaded
 	$effect(() => {
 		if (task) {
@@ -46,19 +48,19 @@
 
 	function handleSave() {
 		if (!task) return;
-		
+
 		console.log('Saving task changes:', {
 			name: editedTaskName,
 			completed: editedCompleted,
 			archived: editedArchived
 		});
-		
+
 		updateTask(task.id || '', {
 			name: editedTaskName,
 			completed: editedCompleted,
 			archived: editedArchived
 		});
-		
+
 		goto('/tasks');
 	}
 
@@ -98,33 +100,25 @@
 
 {#if !task}
 	<section class="p-4">
-		<div class="max-w-4xl mx-auto">
-			<div class="text-center py-12">
+		<div class="mx-auto max-w-4xl">
+			<div class="py-12 text-center">
 				<div class="loading loading-spinner loading-lg mx-auto"></div>
-				<p class="mt-4 text-base-content/70">Loading task...</p>
+				<p class="text-base-content/70 mt-4">Loading task...</p>
 			</div>
 		</div>
 	</section>
 {:else}
 	<section class="p-4">
-		<div class="max-w-4xl mx-auto">
+		<div class="mx-auto max-w-4xl">
 			<!-- Header -->
-			<div class="flex items-center justify-between mb-6">
-				<h1 class="text-3xl font-bold">
-					Edit Task
-				</h1>
+			<div class="mb-6 flex items-center justify-between">
+				<h1 class="text-3xl font-bold">Edit Task</h1>
 				<div class="flex gap-2">
-					<button 
-						class="btn btn-outline"
-						onclick={handleCancel}
-					>
+					<button class="btn btn-outline" onclick={handleCancel}>
 						<X size={16} />
 						Cancel
 					</button>
-					<button 
-						class="btn btn-primary"
-						onclick={handleSave}
-					>
+					<button class="btn btn-primary" onclick={handleSave}>
 						<Save size={16} />
 						Save Changes
 					</button>
@@ -132,58 +126,59 @@
 			</div>
 
 			<!-- Task Properties -->
-			<div class="properties-panel bg-base-200 rounded-box shadow-md mb-6">
+			<div class="properties-panel bg-base-200 rounded-box mb-6 shadow-md">
 				<div class="p-6">
 					<div class="form-control">
-						<div class="flex gap-3 items-center">
-							<input 
-								type="text" 
-								class="input input-bordered flex-1" 
+						<div class="flex items-center gap-3">
+							<input
+								type="text"
+								class="input input-bordered flex-1"
 								bind:value={editedTaskName}
 								placeholder="Enter task name"
 							/>
 							<div class="flex items-center gap-1">
-								<span class="text-sm text-base-content/70">Complete</span>
-								<AnimatedIcon iconType="complete" buttonType="action" bind:selected={editedCompleted} />
+								<span class="text-base-content/70 text-sm">Complete</span>
+								<AnimatedIcon
+									iconType="complete"
+									buttonType="action"
+									bind:selected={editedCompleted}
+								/>
 							</div>
 							<div class="flex items-center gap-1">
-								<span class="text-sm text-base-content/70">Archive</span>
-								<AnimatedIcon iconType="archive" buttonType="action" bind:selected={editedArchived} />
+								<span class="text-base-content/70 text-sm">Archive</span>
+								<AnimatedIcon
+									iconType="archive"
+									buttonType="action"
+									bind:selected={editedArchived}
+								/>
 							</div>
 						</div>
 					</div>
 				</div>
-				
+
 				<div class="p-6">
-					<h2 class="text-xl font-semibold mb-4">Associated Tags</h2>
-					<div class="tags-container bg-base-300 rounded-lg p-4 min-h-20">
-					<div class="flex flex-wrap gap-3">
-						{#each taskTags as tag (tag.id)}
-							<div class="removable-tag relative">
-								<button 
-									class="tag-chip clickable-tag"
-									onclick={() => handleTagClick(tag)}
-								>
-									#{tag.name}
-								</button>
-								<button 
-									class="remove-tag-button absolute -top-2 -right-1.5 w-4 h-4 bg-error hover:bg-error/80 text-error-content rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200"
-									onclick={() => removeTag(tag.id || '')}
-									title="Remove tag"
-								>
-									×
-								</button>
-							</div>
-						{/each}
-						<!-- Ghost "Add Tag" chip -->
-						<button 
-							class="tag-chip add-tag-chip"
-							onclick={addTag}
-							title="Add a new tag"
-						>
-							add tag ＋
-						</button>
-					</div>
+					<h2 class="mb-4 text-xl font-semibold">Associated Tags</h2>
+					<div class="tags-container bg-base-300 min-h-20 rounded-lg p-4">
+						<div class="flex flex-wrap gap-3">
+							{#each taskTags as tag (tag.id)}
+								<div class="removable-tag relative">
+									<button class="tag-chip clickable-tag" onclick={() => handleTagClick(tag)}>
+										#{tag.name}
+									</button>
+									<button
+										class="remove-tag-button bg-error hover:bg-error/80 text-error-content absolute -top-2 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full text-xs font-bold transition-all duration-200"
+										onclick={() => removeTag(tag.id || '')}
+										title="Remove tag"
+									>
+										×
+									</button>
+								</div>
+							{/each}
+							<!-- Ghost "Add Tag" chip -->
+							<button class="tag-chip add-tag-chip" onclick={addTag} title="Add a new tag">
+								add tag ＋
+							</button>
+						</div>
 					</div>
 				</div>
 			</div>
@@ -191,38 +186,38 @@
 			<!-- Task Metadata -->
 			<div class="metadata-panel bg-base-200 rounded-box shadow-md">
 				<div class="p-4">
-					<h2 class="text-xl font-semibold flex items-center gap-2">
+					<h2 class="flex items-center gap-2 text-xl font-semibold">
 						<Calendar size={20} />
 						Task Information
 					</h2>
 				</div>
-				
+
 				<div class="p-6">
-					<div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
+					<div class="grid grid-cols-1 gap-6 text-sm md:grid-cols-2">
 						<div>
 							<span class="label-text font-medium">Created</span>
 							<p class="text-base-content/70 mt-1">
 								{formatDate(task.createdAt)}
 							</p>
 						</div>
-						
+
 						<div>
 							<span class="label-text font-medium">Last Updated</span>
 							<p class="text-base-content/70 mt-1">
 								{formatDate(task.updatedAt)}
 							</p>
 						</div>
-						
+
 						<div>
 							<span class="label-text font-medium">Task ID</span>
 							<p class="text-base-content/70 mt-1 font-mono text-xs">
 								{task.id}
 							</p>
 						</div>
-						
+
 						<div>
 							<span class="label-text font-medium">Status</span>
-							<div class="flex gap-2 mt-1">
+							<div class="mt-1 flex gap-2">
 								{#if editedCompleted}
 									<span class="badge badge-success badge-sm">Completed</span>
 								{/if}
@@ -265,7 +260,8 @@
 		transform: scale(1.05);
 	}
 
-	.properties-panel, .metadata-panel {
+	.properties-panel,
+	.metadata-panel {
 		transition: all 0.2s ease;
 	}
 

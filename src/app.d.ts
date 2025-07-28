@@ -32,7 +32,7 @@ declare global {
 		parentType: 'task' | 'tag';
 		childType: 'task' | 'tag';
 		createdAt: Timestamp;
-	}
+	};
 }
 
 export {};
