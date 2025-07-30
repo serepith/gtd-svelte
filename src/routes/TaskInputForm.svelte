@@ -54,7 +54,8 @@
 		//alert(sel?.anchorOffset);
 		//alert(sel?.anchorNode?.textContent);
 
-		if (sel?.anchorNode?.textContent) return sel.anchorNode.textContent[sel?.anchorOffset - 1];
+		if (sel?.anchorNode?.textContent?.length && sel?.anchorNode?.textContent?.length > 1) 
+			return sel.anchorNode.textContent[sel?.anchorOffset - 2];
 	}
 
 	let currentNode = $state(window.getSelection()?.anchorNode?.parentElement);
@@ -240,6 +241,102 @@
 			}
 			return;
 		} else if (event.key === 'Enter' && !event.shiftKey) {
+			// Regular Enter - submit
+			event.preventDefault();
+			handleSubmit(event);
+		}
+
+		//console.log('Cursor position after check: ', getCursorPosition());
+	}
+
+	
+	// Handle keyboard events
+	function handleInput(event: Event) {
+		console.log('HANDLE KEYDOWN');
+
+		let e = event as InputEvent;
+
+		console.log("INPUT: " + e.data);
+
+		updateCurrentNode();
+
+		if (e.data === '#' || e.data === '/') {
+			event.preventDefault();
+
+			// no empty tags
+			if (getPrecedingChar() === '#') return;
+
+			const nodeText = currentNode?.textContent;
+
+			const textBeforeCursor = nodeText?.substring(0, (currentNodeTextPosition ? currentNodeTextPosition - 1 : 0)) || '';
+			const textAfterCursor = nodeText?.substring(currentNodeTextPosition || nodeText?.length);
+
+			console.log("substring 1: " + textBeforeCursor);
+			console.log("substring 2: " + textAfterCursor);
+
+
+			currentChunk.content = textBeforeCursor;
+			//chunks.push(chunk('#' + textAfterCursor));
+			chunks.splice(currentNodeIndex + 1, 0, chunk('#' + textAfterCursor));
+			//chunks.push(chunk('#'));
+
+			if (currentNodeTextPosition)
+				currentNodeTextPosition = currentNodeTextPosition - textBeforeCursor.length + 1;
+
+			setTimeout(() => {
+				// console.log("current node: " + currentNode?.outerHTML);
+				// console.log("parent node: " + currentNode?.parentElement?.outerHTML);
+				// console.log("uhhh " + currentNode?.nextElementSibling?.outerHTML);
+				if (currentNode?.nextElementSibling) {
+					//alert("set pos to next sib"+ currentNode.nextSibling.parentElement?.outerHTML);
+					(currentNode.nextElementSibling as HTMLElement).focus();
+					window.getSelection()?.setPosition(currentNode.nextElementSibling, 1);
+					//updateCurrentNode();
+				}
+			}, 0);
+
+			// else if (isInTag()) {
+			// }
+
+			// Ending tag or not, insert the character
+			// This needs to be handled manually because we're going to be
+			// replacing the contenteditable's innerHTML
+			//insertCharacterAtCursor(event.key);
+
+			return;
+		} else if (e.data === 'Backspace') {
+			// if(currentNode?.dataset && currentNode?.dataset.itemId) {
+			// 	(chunks[parseInt(currentNode.dataset.itemId)]).type() = 'text';
+			// }
+			//console.log("text elngth " + currentNode?.textContent);
+			if (!currentNode?.textContent) spliceOutChunk(currentNodeIndex);
+		}
+
+		// Otherwise, if we're in a tag, handle escape characters
+		else if (isInTag()) {
+			if (e.data === 'Enter' || e.data === 'Tab' || e.data === 'Escape') {
+				// If we're in a tag and hit an escape character, end the current tag
+				//insertCharacterAtCursor(SEPARATOR_SPACE);
+				event.preventDefault();
+				chunks.push(chunk(''));
+
+				setTimeout(() => {
+					// console.log("current node: " + currentNode?.outerHTML);
+					// console.log("parent node: " + currentNode?.parentElement?.outerHTML);
+					// console.log("uhhh " + currentNode?.nextElementSibling?.outerHTML);
+					if (currentNode?.nextElementSibling) {
+						console.log('SET TO ' + (currentNode.nextElementSibling as HTMLElement).outerHTML);
+						//alert("set pos to next sib"+ currentNode.nextSibling.parentElement?.outerHTML);
+						(currentNode.nextElementSibling as HTMLElement).focus();
+						window.getSelection()?.setPosition(currentNode.nextElementSibling, 0);
+						//updateCurrentNode();
+					}
+				}, 0);
+			}
+			return;
+		} 
+		else if (e.data === 'Enter') {
+		//else if (event.data === 'Enter' && !event.shiftKey) {
 			// Regular Enter - submit
 			event.preventDefault();
 			handleSubmit(event);
@@ -476,11 +573,11 @@
 </script>
 
 <svelte:document />
-<!-- onsubmit={handleSubmit} -->
 <form
 	class="flex justify-items-center {isSidebar
 		? 'flex flex-row items-center'
 		: 'flex flex-col items-center'}"
+	onsubmit={handleSubmit}
 >
 	<!-- Normal mode: stacked layout -->
 	<div class="relative m-2 min-w-3xs items-center">
@@ -489,7 +586,7 @@
 			<div
 				class="textarea from-primary to-secondary pointer-events-none
 				absolute inset-0 bg-gradient-to-r bg-clip-text text-transparent"
-				style="z-index: 5; min-height: 3.5rem; padding: 1rem 0.75rem;"
+				style="z-index: 5; min-height: 3.5rem; padding: 1rem 0.75rem; word-wrap: break-word; overflow-wrap: break-word; white-space: pre-wrap; line-height: 1.5;"
 			>
 				What's on your mind?
 			</div>
@@ -499,7 +596,8 @@
 		<div
 			bind:this={taskInputElement}
 			contenteditable="false"
-			role="group"
+			role="textbox"
+			tabindex="0"
 			onmousedown={handleOnclick}
 			class="textarea taskinput-textarea inset-0"
 			style="min-height: 3.5rem; padding: 1rem 0.75rem; word-wrap: break-word; overflow-wrap: break-word; white-space: pre-wrap;"
@@ -513,7 +611,7 @@
 					role="textbox"
 					tabindex={0}
 					transition:scale={{ duration: 50 }}
-					onkeydown={handleKeydown}
+					oninput={handleInput}
 					onkeyup={(e) => {
 						// if(i > 0 && (chunks[i].content.length === 0 || chunk.content === '<br>')) {
 						// 	console.log("CURRENT NODE " + currentNode?.outerHTML);
@@ -574,7 +672,15 @@
 	.tag-chip {
 		display: inline-flex;
 		align-items: center;
-		vertical-align: baseline;
+		vertical-align: middle;
+		line-height: 1.5 !important;
+		min-height: 1.5rem !important;
+		font-size: inherit;
+	}
+
+	.text-chip {
+		min-height: 1.5rem;
+		line-height: 1.5;
 	}
 
 	.tag-chip {

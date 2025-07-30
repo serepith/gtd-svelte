@@ -18,6 +18,14 @@
 			"type": "node"
 		},
 		{
+			"name": "Server for mobile testing",
+			"request": "launch",
+			"runtimeArgs": ["run", "dev", "--", "--host", "0.0.0.0"],
+			"skipFiles": ["<node_internals>/**"],
+			"runtimeExecutable": "npm",
+			"type": "node"
+		},
+		{
 			"name": "Client",
 			"type": "chrome",
 			"request": "launch",

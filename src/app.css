@@ -161,11 +161,11 @@ button:focus:not(:focus-visible) {
 }
 
 /* Mobile-specific styling for better visibility */
-@media (max-width: 768px) {
+/* @media (max-width: 768px) {
 	.tag-chip {
 		font-size: 1rem;
 		padding: 0.375rem 1rem;
 		min-height: 2.5rem;
 		margin-inline: 0.125rem;
 	}
-}
+} */

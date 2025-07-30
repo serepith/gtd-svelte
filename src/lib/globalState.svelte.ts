@@ -7,11 +7,12 @@ import {
 	PUBLIC_FIREBASE_STORAGE_BUCKET
 } from '$env/static/public';
 import { initializeApp, type FirebaseApp } from 'firebase/app';
-import { getAuth, type Auth, type User } from 'firebase/auth';
+import { connectAuthEmulator, getAuth, type Auth, type User } from 'firebase/auth';
 import {
 	CACHE_SIZE_UNLIMITED,
 	// CACHE_SIZE_UNLIMITED,
 	collection,
+	connectFirestoreEmulator,
 	getFirestore,
 	onSnapshot,
 	persistentLocalCache,
@@ -188,11 +189,20 @@ const graphNodeConverter: FirestoreDataConverter<GraphNode> = {
 };
 
 export function initFirebase() {
+
 	console.log('Initializing Firebase...');
+
 	// Initialize Firebase, auth, analytics, etc.
 	firebase.app = initializeApp(firebaseConfig);
 	firebase.db = getFirestore(firebase.app);
 	firebase.auth = getAuth(firebase.app);
+
+	if (location.hostname === 'localhost' || location.hostname.includes('192.168')) {
+		const emulatorHost = location.hostname;
+
+		connectAuthEmulator(firebase.auth, `http://${emulatorHost}:9099`);
+		connectFirestoreEmulator(firebase.db, emulatorHost, 8080);
+	}
 
 	console.log('Firebase initialized:', firebase.app.name);
 
