@@ -24,6 +24,11 @@
 
 		goto('/');
 	}
+
+	function handleTagsClick(e: Event) {
+		e.preventDefault();
+		goto('/tags');
+	}
 </script>
 
 <header>
@@ -37,6 +42,9 @@
 			</li>
 			<li aria-current={page.url.pathname === '/tasks' ? 'page' : undefined}>
 				<a href="/tasks" onclick={handleTasksClick}>Tasks</a>
+			</li>
+			<li aria-current={page.url.pathname.startsWith('/tags') ? 'page' : undefined}>
+				<a href="/tags" onclick={handleTagsClick}>Tags</a>
 			</li>
 		</ul>
 		<svg viewBox="0 0 2 3" aria-hidden="true">

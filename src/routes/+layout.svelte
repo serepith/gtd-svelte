@@ -14,7 +14,7 @@
 
 	<section class="flex flex-1 flex-col gap-5 p-5">
 		<div
-			class="grid flex-1 place-items-center-safe
+			class="grid {isSidebar ? 'min-content' : 'flex-1'} place-items-center-safe
 		border-none focus-within:outline-none"
 		>
 			<TaskInputForm bind:isSidebar />

@@ -54,7 +54,7 @@
 		//alert(sel?.anchorOffset);
 		//alert(sel?.anchorNode?.textContent);
 
-		if (sel?.anchorNode?.textContent?.length && sel?.anchorNode?.textContent?.length > 1) 
+		if (sel?.anchorNode?.textContent?.length && sel?.anchorNode?.textContent?.length > 1)
 			return sel.anchorNode.textContent[sel?.anchorOffset - 2];
 	}
 
@@ -249,14 +249,13 @@
 		//console.log('Cursor position after check: ', getCursorPosition());
 	}
 
-	
 	// Handle keyboard events
 	function handleInput(event: Event) {
 		console.log('HANDLE KEYDOWN');
 
 		let e = event as InputEvent;
 
-		console.log("INPUT: " + e.data);
+		console.log('INPUT: ' + e.data);
 
 		updateCurrentNode();
 
@@ -268,12 +267,12 @@
 
 			const nodeText = currentNode?.textContent;
 
-			const textBeforeCursor = nodeText?.substring(0, (currentNodeTextPosition ? currentNodeTextPosition - 1 : 0)) || '';
+			const textBeforeCursor =
+				nodeText?.substring(0, currentNodeTextPosition ? currentNodeTextPosition - 1 : 0) || '';
 			const textAfterCursor = nodeText?.substring(currentNodeTextPosition || nodeText?.length);
 
-			console.log("substring 1: " + textBeforeCursor);
-			console.log("substring 2: " + textAfterCursor);
-
+			console.log('substring 1: ' + textBeforeCursor);
+			console.log('substring 2: ' + textAfterCursor);
 
 			currentChunk.content = textBeforeCursor;
 			//chunks.push(chunk('#' + textAfterCursor));
@@ -334,9 +333,8 @@
 				}, 0);
 			}
 			return;
-		} 
-		else if (e.data === 'Enter') {
-		//else if (event.data === 'Enter' && !event.shiftKey) {
+		} else if (e.data === 'Enter') {
+			//else if (event.data === 'Enter' && !event.shiftKey) {
 			// Regular Enter - submit
 			event.preventDefault();
 			handleSubmit(event);

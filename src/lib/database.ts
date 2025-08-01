@@ -188,6 +188,72 @@ export async function getTasksInTag(tagId: string) {
 	return (await getRelations(tagId, 'child', 'task')).map((doc) => doc as Task);
 }
 
+export async function getTasksInTagWithEquivalents(
+	tagId: string
+): Promise<Array<Task & { sourceTagId: string; sourceTagName: string; isEquivalent: boolean }>> {
+	const nodes = getNodesCollection();
+	if (!nodes) {
+		console.error('No nodes collection found');
+		return [];
+	}
+
+	// Get the current tag info
+	const currentTagQuery = query(nodes, where('__name__', '==', tagId)).withConverter(tagConverter);
+	const currentTagSnapshot = await getDocsFromCache(currentTagQuery);
+	const currentTag = currentTagSnapshot.docs[0]?.data();
+
+	if (!currentTag) {
+		console.error('Current tag not found');
+		return [];
+	}
+
+	// Get tasks directly associated with this tag
+	const directTasks = await getTasksInTag(tagId);
+	const tasksWithSource = directTasks.map((task) => ({
+		...task,
+		sourceTagId: tagId,
+		sourceTagName: currentTag.name,
+		isEquivalent: false
+	}));
+
+	// Get all equivalent tags
+	const equivalencies = await getTagEquivalencies(tagId);
+
+	// Get tasks from equivalent tags
+	for (const equivalency of equivalencies) {
+		// Determine which tag is the "other" tag (not the current one)
+		const otherTagId = equivalency.parentId === tagId ? equivalency.childId : equivalency.parentId;
+
+		// Get the other tag's info
+		const otherTagQuery = query(nodes, where('__name__', '==', otherTagId)).withConverter(
+			tagConverter
+		);
+		const otherTagSnapshot = await getDocsFromCache(otherTagQuery);
+		const otherTag = otherTagSnapshot.docs[0]?.data();
+
+		if (!otherTag) continue;
+
+		// Get tasks from the other tag
+		const otherTasks = await getTasksInTag(otherTagId);
+
+		// Add tasks with source info, but only if they aren't already in our list
+		for (const task of otherTasks) {
+			const existingTask = tasksWithSource.find((t) => t.id === task.id);
+			if (!existingTask) {
+				tasksWithSource.push({
+					...task,
+					sourceTagId: otherTagId,
+					sourceTagName: otherTag.name,
+					isEquivalent: true
+				});
+			}
+		}
+	}
+
+	// Sort by creation date (newest first)
+	return tasksWithSource.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
+}
+
 export async function getTagsForTask(taskId: string): Promise<Tag[]> {
 	return (await getRelations(taskId, 'parent', 'tag')).map((doc) => doc as Tag);
 }
@@ -199,4 +265,128 @@ export async function getTagId(tagName: string) {
 			await getDocsFromCache(query(nodes, where('name', '==', tagName)).withConverter(tagConverter))
 		).docs[0].data() as Tag;
 	return null;
+}
+
+export async function getAllTags(): Promise<Tag[]> {
+	const nodes = getNodesCollection();
+	if (!nodes) {
+		console.error('No nodes collection found');
+		return [];
+	}
+
+	const q = query(nodes, where('type', '==', 'tag')).withConverter(tagConverter);
+	const querySnapshot = await getDocsFromCache(q);
+	return querySnapshot.docs.map((doc) => doc.data());
+}
+
+export function filterTagsByName(tags: Tag[], searchTerm: string): Tag[] {
+	if (!searchTerm.trim()) return tags;
+	const term = searchTerm.toLowerCase();
+	return tags
+		.filter((tag) => tag.name.toLowerCase().includes(term))
+		.sort((a, b) => {
+			// Sort by relevance: exact matches first, then starts with, then contains
+			const aName = a.name.toLowerCase();
+			const bName = b.name.toLowerCase();
+
+			if (aName === term) return -1;
+			if (bName === term) return 1;
+			if (aName.startsWith(term) && !bName.startsWith(term)) return -1;
+			if (bName.startsWith(term) && !aName.startsWith(term)) return 1;
+
+			return aName.localeCompare(bName);
+		});
+}
+
+export async function createTagEquivalency(
+	masterTagId: string,
+	linkedTagId: string,
+	displayName: string,
+	useOriginalName: boolean = false
+) {
+	const junctions = getJunctionsCollection();
+
+	if (!junctions) {
+		console.error('No junctions collection found');
+		return;
+	}
+
+	const equivalencyJunction: Omit<Junction, 'id'> = {
+		parentId: masterTagId,
+		childId: linkedTagId,
+		parentType: 'tag',
+		childType: 'tag',
+		createdAt: Timestamp.now(),
+		junctionType: {
+			type: 'equivalency',
+			details: {
+				displayName,
+				useOriginalName
+			}
+		}
+	};
+
+	const junctionRef = await addDoc(junctions, equivalencyJunction);
+	console.log('Created tag equivalency:', masterTagId, linkedTagId, junctionRef.id);
+	return junctionRef.id;
+}
+
+export async function getTagEquivalencies(tagId: string): Promise<Junction[]> {
+	const junctions = getJunctionsCollection();
+
+	if (!junctions) {
+		console.error('No junctions collection found');
+		return [];
+	}
+
+	// Get equivalencies where this tag is the master (parent)
+	const masterQuery = query(
+		junctions,
+		where('parentId', '==', tagId),
+		where('parentType', '==', 'tag'),
+		where('childType', '==', 'tag'),
+		where('junctionType.type', '==', 'equivalency')
+	);
+
+	// Get equivalencies where this tag is the linked tag (child)
+	const linkedQuery = query(
+		junctions,
+		where('childId', '==', tagId),
+		where('parentType', '==', 'tag'),
+		where('childType', '==', 'tag'),
+		where('junctionType.type', '==', 'equivalency')
+	);
+
+	const [masterSnapshot, linkedSnapshot] = await Promise.all([
+		getDocsFromCache(masterQuery),
+		getDocsFromCache(linkedQuery)
+	]);
+
+	const allEquivalencies = [...masterSnapshot.docs, ...linkedSnapshot.docs].map((doc) => {
+		const data = doc.data();
+		return {
+			id: doc.id,
+			parentId: data.parentId,
+			childId: data.childId,
+			parentType: data.parentType,
+			childType: data.childType,
+			createdAt: data.createdAt,
+			junctionType: data.junctionType
+		} as Junction;
+	});
+
+	return allEquivalencies;
+}
+
+export async function removeTagEquivalency(junctionId: string) {
+	const junctions = getJunctionsCollection();
+
+	if (!junctions) {
+		console.error('No junctions collection found');
+		return;
+	}
+
+	const docRef = doc(junctions, junctionId);
+	await updateDoc(docRef, { archived: true });
+	console.log('Removed tag equivalency:', junctionId);
 }

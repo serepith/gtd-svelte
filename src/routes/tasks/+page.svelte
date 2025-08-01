@@ -68,7 +68,7 @@
 		sessionStorage.setItem('tagTransition', JSON.stringify(transitionData));
 
 		// Navigate
-		goto(`/tag/${tag.name}`);
+		goto(`/tags/${tag.name}`);
 	}
 
 	// Track tasks that are animating out

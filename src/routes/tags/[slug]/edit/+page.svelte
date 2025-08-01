@@ -2,8 +2,16 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { getTagId, getTasksInTag } from '$lib/database';
-	import { Save, X, Plus, Trash2 } from '@lucide/svelte';
+	import {
+		getTagId,
+		getTasksInTagWithEquivalents,
+		createTagEquivalency,
+		getTagEquivalencies,
+		removeTagEquivalency,
+		getAllTags,
+		filterTagsByName
+	} from '$lib/database';
+	import { Save, X, Plus, Link, Unlink } from '@lucide/svelte';
 
 	// Get the tag name from the URL parameter
 	let tagName = $page.params.slug;
@@ -23,9 +31,30 @@
 	let graphEdges: Array<{ source: string; target: string }> = $state([]);
 	let containerDimensions = $state({ width: 0, height: 0, aspectRatio: 1 });
 
-	let taggedTasksPromise: Promise<Task[]> = $state(
-		getTagId(tagName).then((tag) => getTasksInTag(tag?.id || ''))
+	// Type for tasks with source information
+	type TaskWithSource = Task & {
+		sourceTagId: string;
+		sourceTagName: string;
+		isEquivalent: boolean;
+	};
+
+	let taggedTasksPromise: Promise<TaskWithSource[]> = $state(
+		getTagId(tagName).then((tag) => getTasksInTagWithEquivalents(tag?.id || ''))
 	);
+
+	// Tag equivalency state
+	let currentTag: Tag | null = $state(null);
+	let equivalencies: Junction[] = $state([]);
+	let showEquivalencyModal = $state(false);
+	let newEquivalencyTagName = $state('');
+	let newEquivalencyDisplayName = $state('');
+	let newEquivalencyUseOriginal = $state(false);
+
+	// Tag suggestions
+	let allTags: Tag[] = $state([]);
+	let suggestedTags = $derived(filterTagsByName(allTags, newEquivalencyTagName));
+	let showSuggestions = $state(false);
+	let selectedSuggestionIndex = $state(-1);
 
 	// Mock hierarchy data - replace with actual data from your database
 	function generateMockHierarchy() {
@@ -121,6 +150,18 @@
 		generateMockHierarchy();
 		updateContainerDimensions();
 
+		// Load current tag, equivalencies, and all tags
+		getTagId(tagName).then(async (tag) => {
+			currentTag = tag;
+			if (tag?.id) {
+				equivalencies = await getTagEquivalencies(tag.id);
+			}
+		});
+
+		getAllTags().then((tags) => {
+			allTags = tags.filter((tag) => tag.name !== tagName); // Exclude current tag
+		});
+
 		// Update dimensions on resize
 		window.addEventListener('resize', updateContainerDimensions);
 		return () => window.removeEventListener('resize', updateContainerDimensions);
@@ -133,11 +174,11 @@
 			color: editedColor
 		});
 		// TODO: Implement save logic
-		goto(`/tag/${editedTagName}`);
+		goto(`/tags/${editedTagName}`);
 	}
 
 	function handleCancel() {
-		goto(`/tag/${tagName}`);
+		goto(`/tags/${tagName}`);
 	}
 
 	function addRelatedTag() {
@@ -148,6 +189,100 @@
 	function removeRelatedTag(tagId: string) {
 		console.log('Remove related tag:', tagId);
 		// TODO: Implement remove tag logic
+	}
+
+	function openEquivalencyModal() {
+		showEquivalencyModal = true;
+		newEquivalencyTagName = '';
+		newEquivalencyDisplayName = '';
+		newEquivalencyUseOriginal = false;
+		showSuggestions = false;
+		selectedSuggestionIndex = -1;
+	}
+
+	function closeEquivalencyModal() {
+		showEquivalencyModal = false;
+		showSuggestions = false;
+		selectedSuggestionIndex = -1;
+	}
+
+	function handleTagInputChange() {
+		showSuggestions = newEquivalencyTagName.trim().length > 0 && suggestedTags.length > 0;
+		selectedSuggestionIndex = -1;
+	}
+
+	function handleTagInputKeydown(event: KeyboardEvent) {
+		if (!showSuggestions) return;
+
+		switch (event.key) {
+			case 'ArrowDown':
+				event.preventDefault();
+				selectedSuggestionIndex = Math.min(selectedSuggestionIndex + 1, suggestedTags.length - 1);
+				break;
+			case 'ArrowUp':
+				event.preventDefault();
+				selectedSuggestionIndex = Math.max(selectedSuggestionIndex - 1, -1);
+				break;
+			case 'Enter':
+				event.preventDefault();
+				if (selectedSuggestionIndex >= 0) {
+					selectSuggestion(suggestedTags[selectedSuggestionIndex]);
+				}
+				break;
+			case 'Escape':
+				event.preventDefault();
+				showSuggestions = false;
+				selectedSuggestionIndex = -1;
+				break;
+		}
+	}
+
+	function selectSuggestion(tag: Tag) {
+		newEquivalencyTagName = tag.name;
+		showSuggestions = false;
+		selectedSuggestionIndex = -1;
+	}
+
+	async function createEquivalency() {
+		if (!currentTag?.id || !newEquivalencyTagName.trim()) {
+			return;
+		}
+
+		try {
+			// Get or create the linked tag
+			let linkedTag = await getTagId(newEquivalencyTagName.trim());
+			if (!linkedTag) {
+				console.error('Linked tag not found');
+				return;
+			}
+
+			const displayName = newEquivalencyDisplayName.trim() || newEquivalencyTagName.trim();
+
+			await createTagEquivalency(
+				currentTag.id!,
+				linkedTag.id!,
+				displayName,
+				newEquivalencyUseOriginal
+			);
+
+			// Refresh equivalencies
+			equivalencies = await getTagEquivalencies(currentTag.id);
+			closeEquivalencyModal();
+		} catch (error) {
+			console.error('Error creating equivalency:', error);
+		}
+	}
+
+	async function removeEquivalency(junctionId: string) {
+		try {
+			await removeTagEquivalency(junctionId);
+			// Refresh equivalencies
+			if (currentTag?.id) {
+				equivalencies = await getTagEquivalencies(currentTag.id);
+			}
+		} catch (error) {
+			console.error('Error removing equivalency:', error);
+		}
 	}
 </script>
 
@@ -314,6 +449,57 @@
 			</div>
 		</div>
 
+		<!-- Tag Equivalencies -->
+		<div class="equivalency-panel bg-base-100 rounded-box mb-6 p-6 shadow-md">
+			<div class="mb-4 flex items-center justify-between">
+				<h2 class="text-xl font-semibold">Tag Equivalencies</h2>
+				<button class="btn btn-sm btn-outline" onclick={openEquivalencyModal}>
+					<Link size={14} />
+					Link Tag
+				</button>
+			</div>
+
+			{#if equivalencies.length === 0}
+				<div class="py-8 text-center">
+					<p class="text-base-content/70">No equivalent tags linked yet.</p>
+					<p class="text-base-content/50 mt-1 text-sm">
+						Link tags that represent the same concept.
+					</p>
+				</div>
+			{:else}
+				<div class="space-y-3">
+					{#each equivalencies as equivalency}
+						{@const details = equivalency.junctionType?.details}
+						<div class="bg-base-200 flex items-center justify-between rounded-lg p-4">
+							<div class="flex items-center gap-3">
+								<div class="tag-chip">#{tagName}</div>
+								<Link size={16} class="text-base-content/50" />
+								<div class="tag-chip related-tag-chip">
+									#{details?.useOriginalName
+										? equivalency.childId
+										: details?.displayName || equivalency.childId}
+								</div>
+							</div>
+							<div class="flex items-center gap-2">
+								{#if details?.useOriginalName}
+									<span class="badge badge-sm badge-outline">Original Name</span>
+								{:else}
+									<span class="badge badge-sm badge-accent">Custom Display</span>
+								{/if}
+								<button
+									class="btn btn-sm btn-ghost text-error hover:bg-error/10"
+									onclick={() => removeEquivalency(equivalency.id || '')}
+									title="Remove equivalency"
+								>
+									<Unlink size={14} />
+								</button>
+							</div>
+						</div>
+					{/each}
+				</div>
+			{/if}
+		</div>
+
 		<!-- Tag Properties -->
 		<div class="properties-panel bg-base-100 rounded-box mb-6 p-6 shadow-md">
 			<h2 class="mb-4 text-xl font-semibold">Tag Properties</h2>
@@ -401,6 +587,92 @@
 		</div>
 	</div>
 </section>
+
+<!-- Equivalency Modal -->
+{#if showEquivalencyModal}
+	<div class="modal modal-open">
+		<div class="modal-box">
+			<h3 class="mb-4 text-lg font-bold">Link Equivalent Tag</h3>
+
+			<div class="form-control mb-4">
+				<label class="label">
+					<span class="label-text">Tag to link</span>
+				</label>
+				<div class="relative">
+					<input
+						type="text"
+						class="input input-bordered"
+						bind:value={newEquivalencyTagName}
+						oninput={handleTagInputChange}
+						onkeydown={handleTagInputKeydown}
+						onfocus={handleTagInputChange}
+						placeholder="Enter existing tag name"
+						autocomplete="off"
+					/>
+					{#if showSuggestions && suggestedTags.length > 0}
+						<div
+							class="bg-base-100 border-base-300 absolute z-50 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border shadow-lg"
+						>
+							{#each suggestedTags.slice(0, 8) as tag, index}
+								<button
+									type="button"
+									class="hover:bg-base-200 w-full px-3 py-2 text-left transition-colors first:rounded-t-lg last:rounded-b-lg"
+									class:bg-base-200={index === selectedSuggestionIndex}
+									onclick={() => selectSuggestion(tag)}
+								>
+									<div class="tag-chip mr-2 inline-block text-xs">#{tag.name}</div>
+									<span class="text-base-content/70 text-sm">{tag.name}</span>
+								</button>
+							{/each}
+						</div>
+					{/if}
+				</div>
+				<label class="label">
+					<span class="label-text-alt">Must be an existing tag</span>
+				</label>
+			</div>
+
+			<div class="form-control mb-4">
+				<label class="label">
+					<span class="label-text">Display name (optional)</span>
+				</label>
+				<input
+					type="text"
+					class="input input-bordered"
+					bind:value={newEquivalencyDisplayName}
+					placeholder="Custom display name"
+				/>
+				<label class="label">
+					<span class="label-text-alt">Leave empty to use the linked tag's original name</span>
+				</label>
+			</div>
+
+			<div class="form-control mb-6">
+				<label class="label cursor-pointer">
+					<span class="label-text">Use original tag name when displaying</span>
+					<input type="checkbox" class="checkbox" bind:checked={newEquivalencyUseOriginal} />
+				</label>
+				<label class="label">
+					<span class="label-text-alt"
+						>If checked, always show the linked tag's original name instead of custom display name</span
+					>
+				</label>
+			</div>
+
+			<div class="modal-action">
+				<button class="btn btn-ghost" onclick={closeEquivalencyModal}>Cancel</button>
+				<button
+					class="btn btn-primary"
+					onclick={createEquivalency}
+					disabled={!newEquivalencyTagName.trim()}
+				>
+					Link Tags
+				</button>
+			</div>
+		</div>
+		<div class="modal-backdrop" onclick={closeEquivalencyModal}></div>
+	</div>
+{/if}
 
 <style>
 	.page-tag-chip {

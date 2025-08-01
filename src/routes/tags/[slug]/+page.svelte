@@ -2,8 +2,15 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { getTagId, getTasksInTag } from '$lib/database';
+	import { getTagId, getTasksInTagWithEquivalents } from '$lib/database';
 	import { Check, Archive, Edit } from '@lucide/svelte';
+
+	// Type for tasks with source information
+	type TaskWithSource = Task & {
+		sourceTagId: string;
+		sourceTagName: string;
+		isEquivalent: boolean;
+	};
 
 	// Get the tag name from the URL parameter
 	let tagName = $page.params.slug;
@@ -11,8 +18,8 @@
 	let isAnimating = $state(true); // Start as true so content is hidden initially
 	//let error : Error | null = $state(null);
 
-	let taggedTasksPromise: Promise<Task[]> = $state(
-		getTagId(tagName).then((tag) => getTasksInTag(tag?.id || ''))
+	let taggedTasksPromise: Promise<TaskWithSource[]> = $state(
+		getTagId(tagName).then((tag) => getTasksInTagWithEquivalents(tag?.id || ''))
 	);
 
 	console.log('Tag view for:', tagName);
@@ -107,7 +114,7 @@
 	}
 
 	function handleEditTag() {
-		goto(`/tag/${tagName}/edit`);
+		goto(`/tags/${tagName}/edit`);
 	}
 
 	export function handleComplete(task: any) {
@@ -167,9 +174,10 @@
 					<div class="p-4">
 						<!-- Task table header -->
 						<div
-							class="task-header border-base-300 mb-2 grid grid-cols-[1fr_auto_auto] items-center gap-4 border-b px-2 py-2 font-semibold"
+							class="task-header border-base-300 mb-2 grid grid-cols-[1fr_auto_auto_auto] items-center gap-4 border-b px-2 py-2 font-semibold"
 						>
 							<div>Task</div>
+							<div class="text-right">Source Tag</div>
 							<div class="text-right">Date</div>
 							<div class="text-right">Actions</div>
 						</div>
@@ -177,11 +185,20 @@
 						<!-- Task rows -->
 						{#each taggedTasks as task (task.id)}
 							<div
-								class="task-row hover-parent grid grid-cols-[1fr_auto_auto] items-start gap-4 px-2 py-3"
+								class="task-row hover-parent grid grid-cols-[1fr_auto_auto_auto] items-start gap-4 px-2 py-3"
 								class:completed={task.completed}
 							>
 								<div class="task-content">
 									<div class="task-text" class:line-through={task.completed}>{task.name}</div>
+								</div>
+								<div class="task-source self-center text-sm">
+									{#if task.isEquivalent}
+										<div class="tag-chip equivalent-tag" title="Via equivalent tag">
+											#{task.sourceTagName}
+										</div>
+									{:else}
+										<div class="tag-chip current-tag" title="Direct tag">#{task.sourceTagName}</div>
+									{/if}
 								</div>
 								<div class="task-date text-base-content/70 self-center text-sm">
 									{task.createdAt.toDate().toLocaleDateString('en-US', {
@@ -237,8 +254,27 @@
 		color: var(--color-primary-content);
 		padding: 0.125rem 0.5rem;
 		border-radius: 9999px;
-		font-size: 0.875rem;
+		font-size: 0.75rem;
 		font-weight: 500;
+		transition: all 0.2s ease;
+	}
+
+	.current-tag {
+		background-color: var(--color-primary);
+		color: var(--color-primary-content);
+		opacity: 0.9;
+	}
+
+	.equivalent-tag {
+		background-color: var(--color-accent);
+		color: var(--color-accent-content);
+		opacity: 0.8;
+		border: 1px solid var(--color-accent);
+	}
+
+	.equivalent-tag:hover {
+		opacity: 1;
+		transform: scale(1.05);
 	}
 
 	.page-tag-chip {

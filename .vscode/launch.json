@@ -18,11 +18,19 @@
 			"type": "node"
 		},
 		{
-			"name": "Server for mobile testing",
+			"name": "Mobile server",
 			"request": "launch",
 			"runtimeArgs": ["run", "dev", "--", "--host", "0.0.0.0"],
 			"skipFiles": ["<node_internals>/**"],
 			"runtimeExecutable": "npm",
+			"type": "node"
+		},
+		{
+			"name": "Firebase Emulators",
+			"request": "launch",
+			"runtimeArgs": ["emulators:start", "--only", "auth,firestore"],
+			"skipFiles": ["<node_internals>/**"],
+			"runtimeExecutable": "firebase",
 			"type": "node"
 		},
 		{
@@ -37,6 +45,10 @@
 		{
 			"name": "Server/Client",
 			"configurations": ["Server", "Client"]
+		},
+		{
+			"name": "Mobile Development (Server + Firebase)",
+			"configurations": ["Mobile server", "Firebase Emulators"]
 		}
 	]
 }

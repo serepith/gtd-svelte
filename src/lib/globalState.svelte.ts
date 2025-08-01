@@ -145,24 +145,32 @@ const tagConverter: FirestoreDataConverter<Tag> = {
 
 const junctionConverter: FirestoreDataConverter<Junction> = {
 	toFirestore: (junction: Junction): DocumentData => {
-		return {
+		const data: DocumentData = {
 			parentId: junction.parentId,
 			childId: junction.childId,
 			parentType: junction.parentType,
 			childType: junction.childType,
 			createdAt: junction.createdAt
 		};
+		if (junction.junctionType) {
+			data.junctionType = junction.junctionType;
+		}
+		return data;
 	},
 	fromFirestore: (snapshot: QueryDocumentSnapshot, options: SnapshotOptions): Junction => {
 		const data = snapshot.data(options);
-		return {
+		const junction: Junction = {
 			id: snapshot.id,
 			parentId: data.parentId,
 			childId: data.childId,
 			parentType: data.parentType,
 			childType: data.childType,
 			createdAt: data.createdAt
-		} as Junction;
+		};
+		if (data.junctionType) {
+			junction.junctionType = data.junctionType;
+		}
+		return junction;
 	}
 };
 
@@ -189,7 +197,6 @@ const graphNodeConverter: FirestoreDataConverter<GraphNode> = {
 };
 
 export function initFirebase() {
-
 	console.log('Initializing Firebase...');
 
 	// Initialize Firebase, auth, analytics, etc.
@@ -238,12 +245,8 @@ export function initFirebase() {
 				unsubscribe = onSnapshot(
 					junctionsCollection.withConverter(junctionConverter),
 					(snapshot) => {
-						const map = new Map<string, Junction[]>();
-						// map the junctions to their IDs
-						for (const doc of snapshot.docs) {
-						}
 						collections.junctions = snapshot.docs.map((doc) => {
-							return doc.data() as Junction; // Adjust type as needed
+							return doc.data() as Junction;
 						});
 					},
 					(error) => {

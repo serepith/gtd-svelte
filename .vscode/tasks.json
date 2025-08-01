@@ -1,7 +1,31 @@
 {
 	"version": "2.0.0",
-	"label": "Start dev server",
-	"type": "shell",
-	"command": "npm run dev",
-	"args": ["--", "--open"]
+	"tasks": [
+		{
+			"label": "Start dev server",
+			"type": "shell",
+			"command": "npm run dev",
+			"args": ["--", "--open"]
+		},
+		{
+			"label": "Start Firebase Emulators",
+			"type": "shell",
+			"command": "firebase",
+			"args": ["emulators:start", "--only", "auth,firestore"],
+			"isBackground": true,
+			"problemMatcher": {
+				"owner": "firebase",
+				"pattern": {
+					"regexp": "^(.*)$",
+					"file": 1
+				},
+				"background": {
+					"activeOnStart": true,
+					"beginsPattern": "^.*Starting emulators.*$",
+					"endsPattern": "^.*All emulators ready.*$"
+				}
+			},
+			"group": "build"
+		}
+	]
 }

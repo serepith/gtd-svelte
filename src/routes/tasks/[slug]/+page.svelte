@@ -69,7 +69,7 @@
 	}
 
 	function handleTagClick(tag: Tag) {
-		goto(`/tag/${tag.name}`);
+		goto(`/tags/${tag.name}`);
 	}
 
 	function addTag() {

@@ -27,11 +27,19 @@ declare global {
 	};
 	type GraphNode = Task | Tag;
 	type Junction = {
+		id?: string;
 		parentId: string;
 		childId: string;
 		parentType: 'task' | 'tag';
 		childType: 'task' | 'tag';
 		createdAt: Timestamp;
+		junctionType?: {
+			type: 'equivalency' | 'template-instance';
+			details: {
+				displayName?: string;
+				useOriginalName?: boolean;
+			};
+		};
 	};
 }
 
