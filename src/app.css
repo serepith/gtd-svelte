@@ -75,9 +75,9 @@ p {
 	font-weight: 400;
 }
 
-p {
+/* p {
 	line-height: 1.5;
-}
+} */
 
 a {
 	color: var(--color-theme-1);

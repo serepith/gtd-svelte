@@ -362,6 +362,13 @@
 		opacity: 1;
 	}
 
+	/* Better mobile visibility - no hover effects on touch devices */
+	@media (max-width: 768px) {
+		.task-actions {
+			opacity: 0.7;
+		}
+	}
+
 	/* .action-btn {
     padding: 0.25rem;
     border: none;

@@ -1,18 +1,86 @@
 <script lang="ts">
 	import { cubicOut } from 'svelte/easing';
-	import { draw, fade, fly, scale, slide } from 'svelte/transition';
+	import { draw, fade, fly, scale, slide, type DrawParams } from 'svelte/transition';
+	import type { keyof } from 'zod/v4';
 
-	/** Based on https://github.com/jis3r/icons
-	 */
-	type IconType = keyof typeof iconTypes;
+	/** Based on https://github.com/jis3r/icons*/
 
-	type ButtonType = 'action' | 'filter';
+	//#region types
+
+	interface AltText {
+		action: {
+			selected: string,
+			unselected: string
+		},
+		filter: {
+			selected: string,
+			unselected: string
+		}
+	}
+
+	type ButtonType = keyof AltText;
+
+	const iconData = {
+		complete: {
+			staticPaths: ['M21.801 10A10 10 0 1 1 17 3.335'],
+			animatedPaths: [
+				{ 
+					path: 'm9 11 3 3L22 4', 
+					transition: draw, 
+					params: { duration: 200 }, 
+					visibility: 'checked' 
+				}
+			],
+			altText: {
+				action: {
+					selected: 'Mark task as incomplete',
+					unselected: 'Mark task as complete'
+				},
+				filter: {
+					selected: 'Hide completed tasks',
+					unselected: 'Show completed tasks'
+				}
+			}
+		},
+		archive: {
+			staticPaths: ['M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8', 'M10 12h4'],
+			animatedPaths: [
+				{
+					path: 'M22,3v5h-20v-5Z',
+					transition: fly,
+					params: { duration: 200, x: 0, y: -10 },
+					visibility: 'unchecked'
+				},
+				{
+					path: 'M4,7h16v0l-2,-2H6l-2,2Z',
+					transition: customScale,
+					params: { duration: 200 },
+					visibility: 'checked'
+				}
+			],
+			altText: {
+				action: {
+					selected: 'Unarchive task',
+					unselected: 'Archive task'
+				},
+				filter: {
+					selected: 'Hide archived tasks',
+					unselected: 'Show archived tasks'
+				}
+			}
+
+		}
+	}
+
+	type IconType = keyof typeof iconData;
+
+	//#endregion
 
 	interface Props {
 		color?: string;
 		size?: number;
 		strokeWidth?: number;
-		selected?: boolean;
+		selected: boolean;
 		iconType: IconType;
 		buttonType: ButtonType;
 		onclick?: () => void;
@@ -38,60 +106,11 @@
 		};
 	}
 
-	const iconTypes = {
-		complete: {
-			staticPaths: ['M21.801 10A10 10 0 1 1 17 3.335'],
-			animationPaths: [
-				{ path: 'm9 11 3 3L22 4', fn: draw, params: { duration: 200 }, visibility: 'checked' }
-			]
-		},
-		archive: {
-			staticPaths: ['M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8', 'M10 12h4'],
-			animationPaths: [
-				{
-					path: 'M22,3v5h-20v-5Z',
-					fn: fly,
-					params: { duration: 200, x: 0, y: -10 },
-					visibility: 'unchecked'
-				},
-				{
-					path: 'M4,7h16v0l-2,-2H6l-2,2Z',
-					fn: customScale,
-					params: { duration: 200 },
-					visibility: 'checked'
-				}
-			]
-		}
-	};
+	let altText = $derived(iconData[iconType].altText[buttonType][selected ? 'selected' : 'unselected']);
+	let staticPaths = $derived(iconData[iconType].staticPaths);
+	let animationPaths = $derived(iconData[iconType].animatedPaths);
 
-	const altTextTypes = {
-		action: {
-			complete: {
-				selected: 'Mark task as incomplete',
-				unselected: 'Mark task as complete'
-			},
-			archive: {
-				selected: 'Unarchive task',
-				unselected: 'Archive task'
-			}
-		},
-		filter: {
-			complete: {
-				selected: 'Hide completed tasks',
-				unselected: 'Show completed tasks'
-			},
-			archive: {
-				selected: 'Hide archived tasks',
-				unselected: 'Show archived tasks'
-			}
-		}
-	};
-
-	let altText = $derived(altTextTypes[buttonType][iconType][selected ? 'selected' : 'unselected']);
-	let staticPaths = $derived(iconTypes[iconType].staticPaths);
-	let animationPaths = $derived(iconTypes[iconType].animationPaths);
-
-	let isIconChecked = $state(false);
+	let iconCheckedState = $state(false);
 </script>
 
 <button
@@ -101,8 +120,8 @@
 		selected = !selected;
 		onclick();
 	}}
-	onmouseenter={() => (isIconChecked = !selected)}
-	onmouseleave={() => (isIconChecked = selected)}
+	onmouseenter={() => (iconCheckedState = !selected)}
+	onmouseleave={() => (iconCheckedState = selected)}
 	aria-label={altText}
 	title={altText}
 	style="padding: {size / 2}rem"
@@ -129,13 +148,13 @@
 			<!-- Must be nested this way or animations will not play--innermost # must be dependent on
 			 the state change that triggers the animation. -->
 			{#each animationPaths as pathData}
-				{#if (isIconChecked && pathData.visibility === 'checked') || (!isIconChecked && pathData.visibility === 'unchecked')}
+				{#if (iconCheckedState && pathData.visibility === 'checked') || (!iconCheckedState && pathData.visibility === 'unchecked')}
 					<path
 						d={pathData.path}
 						class="animation-path"
 						stroke-dashoffset="0"
 						stroke-dasharray="60"
-						transition:pathData.fn={pathData.params}
+						transition:pathData.transition={pathData.params}
 					/>
 				{/if}
 			{/each}

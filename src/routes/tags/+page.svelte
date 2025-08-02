@@ -3,14 +3,15 @@
 	import { collections } from '$lib/globalState.svelte';
 	import { Hash, Plus, ArrowRight } from '@lucide/svelte';
 
-	let allTags: Tag[] = $derived((collections.nodes.filter((node) => node.type === 'tag') as Tag[]));
+	let allTags: Tag[] = $derived(collections.nodes.filter((node) => node.type === 'tag') as Tag[]);
 
 	// Calculate the number of tag equivalencies
 	let equivalenciesCount = $derived.by(() => {
-		return collections.junctions.filter((junction) => 
-			junction.junctionType?.type === 'equivalency' &&
-			junction.parentType === 'tag' && 
-			junction.childType === 'tag'
+		return collections.junctions.filter(
+			(junction) =>
+				junction.junctionType?.type === 'equivalency' &&
+				junction.parentType === 'tag' &&
+				junction.childType === 'tag'
 		).length;
 	});
 
@@ -115,11 +116,11 @@
 
 			<!-- Simple Tags List -->
 			<div class="bg-base-100 rounded-box p-6 shadow-sm">
-				<h2 class="text-xl font-semibold mb-6">All Tags</h2>
-				<div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+				<h2 class="mb-6 text-xl font-semibold">All Tags</h2>
+				<div class="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-6">
 					{#each allTags.sort((a, b) => a.name.localeCompare(b.name)) as tag}
 						<div
-							class="tag-item flex items-center justify-center p-3 bg-base-200 hover:bg-base-300 rounded-lg cursor-pointer transition-all duration-200 group"
+							class="tag-item bg-base-200 hover:bg-base-300 group flex cursor-pointer items-center justify-center rounded-lg p-3 transition-all duration-200"
 							onclick={() => handleTagClick(tag.name)}
 							role="button"
 							tabindex="0"
@@ -181,7 +182,6 @@
 		font-weight: 500;
 		white-space: nowrap;
 	}
-
 
 	.tag-item:hover {
 		transform: translateY(-1px);

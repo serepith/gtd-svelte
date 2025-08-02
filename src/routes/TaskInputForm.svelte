@@ -69,6 +69,9 @@
 	$inspect(currentNodeTextPosition).with(console.log);
 
 	function spliceOutChunk(i: number) {
+
+		updateCurrentNode();
+
 		let newFocus;
 		let newFocusOffset: number;
 
@@ -76,7 +79,8 @@
 		if (i === currentNodeIndex) {
 			console.log('i=' + i + ' current node ndex ' + currentNodeIndex);
 			newFocus = i - 1;
-			newFocusOffset = chunks[i - 1].content.length;
+			newFocusOffset = chunks[i - 1].content.replace('<br>', '').length;
+			console.log("chunk content: " + chunks[i - 1].content);
 		}
 
 		chunks.splice(i, 1);
@@ -120,6 +124,7 @@
 	});
 
 	function isInTag(): boolean {
+		console.log("in tag");
 		if (currentNode?.classList) return currentNode.classList.contains('tag-chip');
 		else return false;
 	}
@@ -144,7 +149,10 @@
 		const nodeText = currentNode?.textContent;
 
 		const textBeforeCursor = nodeText?.substring(0, currentNodeTextPosition) || '';
-		const textAfterCursor = nodeText?.substring(currentNodeTextPosition || nodeText?.length);
+		let textAfterCursor = nodeText?.substring(currentNodeTextPosition || nodeText?.length);
+
+		if(textAfterCursor?.length === 0)
+			textAfterCursor = '&nbsp;';
 
 		currentChunk.content = textBeforeCursor;
 		chunks.splice(currentNodeIndex + 1, 0, chunk(newChunkText + textAfterCursor));
@@ -166,6 +174,7 @@
 		console.log('HANDLE KEYDOWN');
 
 		updateCurrentNode();
+
 
 		if (event.key === '#' || event.key === '/') {
 			event.preventDefault();
@@ -201,16 +210,10 @@
 				}
 			}, 0);
 
-			// else if (isInTag()) {
-			// }
-
-			// Ending tag or not, insert the character
-			// This needs to be handled manually because we're going to be
-			// replacing the contenteditable's innerHTML
-			//insertCharacterAtCursor(event.key);
-
 			return;
-		} else if (event.key === 'Backspace') {
+		} 
+		
+		else if (event.key === 'Backspace') {
 			// if(currentNode?.dataset && currentNode?.dataset.itemId) {
 			// 	(chunks[parseInt(currentNode.dataset.itemId)]).type() = 'text';
 			// }
@@ -221,10 +224,12 @@
 		// Otherwise, if we're in a tag, handle escape characters
 		else if (isInTag()) {
 			if (event.key === 'Enter' || event.key === 'Tab' || event.key === 'Escape') {
+
+				console.log("key: " + event.key);
 				// If we're in a tag and hit an escape character, end the current tag
 				//insertCharacterAtCursor(SEPARATOR_SPACE);
 				event.preventDefault();
-				chunks.push(chunk(''));
+				addChunk('text');
 
 				setTimeout(() => {
 					// console.log("current node: " + currentNode?.outerHTML);
@@ -249,15 +254,209 @@
 		//console.log('Cursor position after check: ', getCursorPosition());
 	}
 
-	// Handle keyboard events
-	function handleInput(event: Event) {
+	function keydownTest(event: KeyboardEvent) {
+		console.log("KEYCODE: " + event.code);
+	}
+
+	const handleKeydown2 = (e: KeyboardEvent) => {
 		console.log('HANDLE KEYDOWN');
+
+		// console.log('updateCurrentNode exists?', typeof updateCurrentNode); // Should log "function"
+
+		console.log('keydown: ' + e.code);
+		console.log('current node text content: ' + currentNode?.innerHTML);
+
+		updateCurrentNode();
+
+		console.log("current node: " + currentNode?.outerHTML);
+
+		// if (e.code === '#' || e.code === '/') {
+		// 	e.preventDefault();
+
+		// 	// no empty tags
+		// 	if (getPrecedingChar() === '#') return;
+
+		// 	const nodeText = currentNode?.textContent;
+
+		// 	const textBeforeCursor =
+		// 		nodeText?.substring(0, currentNodeTextPosition ? currentNodeTextPosition - 1 : 0) || '';
+		// 	const textAfterCursor = nodeText?.substring(currentNodeTextPosition || nodeText?.length);
+
+		// 	console.log('substring 1: ' + textBeforeCursor);
+		// 	console.log('substring 2: ' + textAfterCursor);
+
+		// 	currentChunk.content = textBeforeCursor;
+		// 	//chunks.push(chunk('#' + textAfterCursor));
+		// 	chunks.splice(currentNodeIndex + 1, 0, chunk('#' + textAfterCursor));
+		// 	//chunks.push(chunk('#'));
+
+		// 	if (currentNodeTextPosition)
+		// 		currentNodeTextPosition = currentNodeTextPosition - textBeforeCursor.length + 1;
+
+		// 	setTimeout(() => {
+		// 		// console.log("current node: " + currentNode?.outerHTML);
+		// 		// console.log("parent node: " + currentNode?.parentElement?.outerHTML);
+		// 		// console.log("uhhh " + currentNode?.nextElementSibling?.outerHTML);
+		// 		if (currentNode?.nextElementSibling) {
+		// 			//alert("set pos to next sib"+ currentNode.nextSibling.parentElement?.outerHTML);
+		// 			(currentNode.nextElementSibling as HTMLElement).focus();
+		// 			window.getSelection()?.setPosition(currentNode.nextElementSibling, 1);
+		// 			//updateCurrentNode();
+		// 		}
+		// 	}, 0);
+
+		// 	return;
+		// } 
+		
+		if (e.code === 'Backspace') {
+			// if(currentNode?.dataset && currentNode?.dataset.itemId) {
+			// 	(chunks[parseInt(currentNode.dataset.itemId)]).type() = 'text';
+			// }
+			//console.log("text elngth " + currentNode?.textContent);
+			if (!currentNode?.textContent) spliceOutChunk(currentNodeIndex);
+		}
+
+		else if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.code)) {
+			//claude code
+			const selection = window.getSelection();
+			const currentElement = selection?.anchorNode?.nodeType === 3 
+					? selection.anchorNode.parentElement 
+					: selection?.anchorNode as HTMLElement;
+			
+			// Find current chunk index
+			const currentIndex = parseInt(currentElement?.dataset.itemId || '0');
+			const currentOffset = selection?.anchorOffset || 0;
+			const textLength = currentElement?.textContent?.length || 0;
+			
+			let shouldNavigate = false;
+			let targetIndex = currentIndex;
+			let targetPosition = 0;
+			
+			if (e.code === 'ArrowLeft' && currentOffset === 0) {
+					// At beginning of current chunk, go to previous
+					shouldNavigate = true;
+					targetIndex = Math.max(0, currentIndex - 1);
+					targetPosition = chunks[targetIndex]?.content?.length || 0; // End of previous chunk
+			} else if (e.code === 'ArrowRight' && currentOffset === textLength) {
+					// At end of current chunk, go to next
+					shouldNavigate = true;
+					targetIndex = Math.min(chunks.length - 1, currentIndex + 1);
+					targetPosition = 0; // Beginning of next chunk
+			}
+			
+			if (shouldNavigate && targetIndex !== currentIndex) {
+					e.preventDefault();
+					
+					// Find the target element
+					const targetElement = document.querySelector(`[data-item-id="${targetIndex}"]`) as HTMLElement;
+					if (targetElement) {
+							targetElement.focus();
+							
+							// Set cursor position
+							if (targetElement.textContent) {
+									const range = document.createRange();
+									const textNode = targetElement.firstChild || targetElement;
+									range.setStart(textNode, Math.min(targetPosition, targetElement.textContent.length));
+									range.collapse(true);
+									
+									selection?.removeAllRanges();
+									selection?.addRange(range);
+							}
+					}
+			}
+		}
+
+		// Otherwise, if we're in a tag, handle escape characters
+		else if (isInTag()) {
+			if (e.code === 'Enter' || e.code === 'Tab' || e.code === 'Escape') {
+				// If we're in a tag and hit an escape character, end the current tag
+				//insertCharacterAtCursor(SEPARATOR_SPACE);
+				e.preventDefault();
+				addChunk('text');
+
+				setTimeout(() => {
+					// console.log("current node: " + currentNode?.outerHTML);
+					// console.log("parent node: " + currentNode?.parentElement?.outerHTML);
+					// console.log("uhhh " + currentNode?.nextElementSibling?.outerHTML);
+					if (currentNode?.nextElementSibling) {
+						console.log('SET TO ' + (currentNode.nextElementSibling as HTMLElement).outerHTML);
+						//alert("set pos to next sib"+ currentNode.nextSibling.parentElement?.outerHTML);
+						(currentNode.nextElementSibling as HTMLElement).focus();
+						window.getSelection()?.setPosition(currentNode.nextElementSibling, 0);
+						//updateCurrentNode();
+						
+						updateCurrentNode();
+					}
+				}, 0);
+
+			}
+			return;
+		} 
+		
+		else if (e.code === 'Enter') {
+			//else if (event.data === 'Enter' && !event.shiftKey) {
+			// Regular Enter - submit
+			e.preventDefault();
+			handleSubmit(e);
+		}
+
+		//console.log('Cursor position after check: ', getCursorPosition());
+	}
+
+	const updateCurrentNode = () => {
+		// console.log("current node " + window.getSelection()?.anchorNode?.textContent);
+		// console.log("parent node " + window.getSelection()?.anchorNode?.parentElement?.outerHTML);
+
+		let lastCurrentNodeIndex = currentNodeIndex;
+
+		console.log('current node index ' + currentNodeIndex + '\n chunks length ' + chunks.length);
+
+		const selection = window.getSelection();
+
+		if(selection) {
+			// node type 3 is text
+			if (selection.anchorNode?.nodeType === 3)
+				currentNode = selection.anchorNode?.parentElement;
+			// 1 is element
+			else if (selection.anchorNode?.nodeType === 1)
+				currentNode = window.getSelection()?.anchorNode as HTMLElement;
+			// if we're in the parent div, well, don't be
+			if (currentNode?.classList.contains('taskinput-textarea')) {
+				if (selection && selection.rangeCount > 0) {
+					const range = selection.getRangeAt(0);
+					const rect = range.getBoundingClientRect();
+					moveToClosestChild(rect.x, rect.y);
+				}
+			}
+			else {
+				if (selection.anchorOffset)
+					currentNodeTextPosition = window.getSelection()?.anchorOffset;
+			}
+		}
+	}
+
+	// Handle keyboard events
+	const handleInput = (event: Event) => {
+		console.log('HANDLE INPUT');
+
+		console.log('updateCurrentNode exists?', typeof updateCurrentNode); // Should log "function"
+    
 
 		let e = event as InputEvent;
 
+		
 		console.log('INPUT: ' + e.data);
 
 		updateCurrentNode();
+
+		console.log("current node: " + currentNode?.outerHTML);
+
+		
+
+		if(!currentNode?.textContent?.trim()) {
+			console.log("CURRENT CHUNK: " + currentChunk);
+			currentChunk.content = '';
+		}
 
 		if (e.data === '#' || e.data === '/') {
 			event.preventDefault();
@@ -269,7 +468,7 @@
 
 			const textBeforeCursor =
 				nodeText?.substring(0, currentNodeTextPosition ? currentNodeTextPosition - 1 : 0) || '';
-			const textAfterCursor = nodeText?.substring(currentNodeTextPosition || nodeText?.length);
+			let textAfterCursor = nodeText?.substring(currentNodeTextPosition || nodeText?.length);
 
 			console.log('substring 1: ' + textBeforeCursor);
 			console.log('substring 2: ' + textAfterCursor);
@@ -294,16 +493,10 @@
 				}
 			}, 0);
 
-			// else if (isInTag()) {
-			// }
-
-			// Ending tag or not, insert the character
-			// This needs to be handled manually because we're going to be
-			// replacing the contenteditable's innerHTML
-			//insertCharacterAtCursor(event.key);
-
 			return;
-		} else if (e.data === 'Backspace') {
+		} 
+		
+		else if (e.data === 'Backspace') {
 			// if(currentNode?.dataset && currentNode?.dataset.itemId) {
 			// 	(chunks[parseInt(currentNode.dataset.itemId)]).type() = 'text';
 			// }
@@ -317,7 +510,7 @@
 				// If we're in a tag and hit an escape character, end the current tag
 				//insertCharacterAtCursor(SEPARATOR_SPACE);
 				event.preventDefault();
-				chunks.push(chunk(''));
+				addChunk('text');
 
 				setTimeout(() => {
 					// console.log("current node: " + currentNode?.outerHTML);
@@ -333,7 +526,9 @@
 				}, 0);
 			}
 			return;
-		} else if (e.data === 'Enter') {
+		} 
+		
+		else if (e.data === 'Enter') {
 			//else if (event.data === 'Enter' && !event.shiftKey) {
 			// Regular Enter - submit
 			event.preventDefault();
@@ -343,8 +538,65 @@
 		//console.log('Cursor position after check: ', getCursorPosition());
 	}
 
+	function moveToClosestChild(x: number, y: number) {
+		if(taskInputElement) {
+			let closestChild = findClosestChild(
+				x,
+				y,
+				Array.from(taskInputElement.children) as HTMLElement[]
+			);
+
+			console.log("closest child: " + closestChild.outerHTML);
+
+			// Create synthetic click event for the child
+			const childRect = closestChild.getBoundingClientRect();
+
+			// Keep coordinates that are within bounds, clamp others
+			const clampedX =
+				x > (childRect.left + 1) && x < (childRect.right - 1)
+					? x // Keep original if within bounds
+					: Math.max(childRect.left + 1, Math.min(childRect.right - 1, x)); // Clamp if outside
+
+			const clampedY =
+				y > (childRect.top + 1) && y < (childRect.bottom - 1)
+					? y // Keep original if within bounds
+					: Math.max(childRect.top + 1, Math.min(childRect.bottom - 1, y)); // Clamp if outside
+
+			console.log('x ' + clampedX + ' y ' + clampedY);
+
+			//closestChild.focus();
+
+			// Just focus and position cursor manually
+			closestChild.focus();
+
+			// Use caretPositionFromPoint or caretRangeFromPoint
+			const position =
+				document.caretPositionFromPoint?.(clampedX, clampedY);
+
+			if (position) {
+				console.log("position: " + position.getClientRect()?.x + ", " + position.getClientRect()?.y);
+				const selection = window.getSelection();
+				selection?.removeAllRanges();
+
+				if ('offsetNode' in position) {
+					// caretPositionFromPoint result
+					const range = document.createRange();
+					range.setStart(position.offsetNode, position.offset);
+					range.collapse(true);
+					selection?.addRange(range);
+				} else {
+					// caretRangeFromPoint result
+					selection?.addRange(position);
+				}
+			}
+		}
+	}
+
 	function handleOnclick(event: MouseEvent) {
 		console.log('this element is: ' + (event.target as HTMLElement).outerHTML);
+
+		console.log("click x: " + event.clientX + ", click y: " + event.clientY);
+
 
 		// Don't do anything if user clicked on a child div
 		if ((event.target as HTMLElement) != taskInputElement) {
@@ -354,55 +606,8 @@
 
 		event.preventDefault();
 
-		let closestChild = findClosestChild(
-			event.clientX,
-			event.clientY,
-			Array.from(taskInputElement.children) as HTMLElement[]
-		);
 
-		//console.log(closestChild.outerHTML);
-
-		// Create synthetic click event for the child
-		const childRect = closestChild.getBoundingClientRect();
-
-		// Keep coordinates that are within bounds, clamp others
-		const clampedX =
-			event.clientX > childRect.left && event.clientX < childRect.right
-				? event.clientX // Keep original if within bounds
-				: Math.max(childRect.left, Math.min(childRect.right, event.clientX)); // Clamp if outside
-
-		const clampedY =
-			event.clientY > childRect.top && event.clientY < childRect.bottom
-				? event.clientY // Keep original if within bounds
-				: Math.max(childRect.top, Math.min(childRect.bottom, event.clientY)); // Clamp if outside
-
-		console.log('x ' + clampedX + ' y ' + clampedY);
-
-		//closestChild.focus();
-
-		// Just focus and position cursor manually
-		closestChild.focus();
-
-		// Use caretPositionFromPoint or caretRangeFromPoint
-		const position =
-			document.caretPositionFromPoint?.(clampedX, clampedY) ||
-			document.caretRangeFromPoint?.(clampedX, clampedY);
-
-		if (position) {
-			const selection = window.getSelection();
-			selection?.removeAllRanges();
-
-			if ('offsetNode' in position) {
-				// caretPositionFromPoint result
-				const range = document.createRange();
-				range.setStart(position.offsetNode, position.offset);
-				range.collapse(true);
-				selection?.addRange(range);
-			} else {
-				// caretRangeFromPoint result
-				selection?.addRange(position);
-			}
-		}
+		moveToClosestChild(event.clientX, event.clientY);
 
 		// let lastChild = taskInputElement?.lastElementChild;
 		// console.log("active element " + document.activeElement?.outerHTML);
@@ -550,24 +755,7 @@
 		}
 	}
 
-	function updateCurrentNode() {
-		// console.log("current node " + window.getSelection()?.anchorNode?.textContent);
-		// console.log("parent node " + window.getSelection()?.anchorNode?.parentElement?.outerHTML);
-
-		let lastCurrentNodeIndex = currentNodeIndex;
-
-		console.log('current node index ' + currentNodeIndex + '\n chunks length ' + chunks.length);
-
-		// node type 3 is text
-		if (window.getSelection()?.anchorNode?.nodeType === 3)
-			currentNode = window.getSelection()?.anchorNode?.parentElement;
-		// 1 is element
-		else if (window.getSelection()?.anchorNode?.nodeType === 1)
-			currentNode = window.getSelection()?.anchorNode as HTMLElement;
-
-		if (window.getSelection()?.anchorOffset)
-			currentNodeTextPosition = window.getSelection()?.anchorOffset;
-	}
+	
 </script>
 
 <svelte:document />
@@ -583,22 +771,25 @@
 		{#if taskTextEmpty()}
 			<div
 				class="textarea from-primary to-secondary pointer-events-none
-				absolute inset-0 bg-gradient-to-r bg-clip-text text-transparent"
-				style="z-index: 5; min-height: 3.5rem; padding: 1rem 0.75rem; word-wrap: break-word; overflow-wrap: break-word; white-space: pre-wrap; line-height: 1.5;"
+				absolute inset-0 bg-gradient-to-r bg-clip-text text-transparent flex align-text-bottom"
+				style="z-index: 5; min-height: 4.25rem; padding: 1rem 1rem; word-wrap: break-word; 
+				overflow-wrap: break-word; white-space: pre-wrap; align-items: center; justify-content: flex-start;"
 			>
 				What's on your mind?
 			</div>
 		{/if}
 
-		<!-- oninput={handleInput} -->
 		<div
 			bind:this={taskInputElement}
 			contenteditable="false"
 			role="textbox"
 			tabindex="0"
 			onmousedown={handleOnclick}
-			class="textarea taskinput-textarea inset-0"
-			style="min-height: 3.5rem; padding: 1rem 0.75rem; word-wrap: break-word; overflow-wrap: break-word; white-space: pre-wrap;"
+			onkeydown={(e) => { updateCurrentNode();  }}
+			class="textarea taskinput-textarea inset-0 flex flex-wrap"
+			style="min-height: 4.25rem; padding: 1rem 0.75rem; word-wrap: break-word; 
+  		align-content: center;
+			overflow-wrap: break-word; white-space: pre-wrap;"
 		>
 			{#each chunks as chunk, i (i)}
 				<div
@@ -610,33 +801,10 @@
 					tabindex={0}
 					transition:scale={{ duration: 50 }}
 					oninput={handleInput}
-					onkeyup={(e) => {
-						// if(i > 0 && (chunks[i].content.length === 0 || chunk.content === '<br>')) {
-						// 	console.log("CURRENT NODE " + currentNode?.outerHTML);
-						// 	if(currentNode?.previousElementSibling) {
-						// 			//alert("set pos to next sib"+ currentNode.nextSibling.parentElement?.outerHTML);
-						// 			window.getSelection()?.setPosition(currentNode.previousElementSibling, 1);
-						// 			//updateCurrentNode();
-						// 		}
-						// 	chunks.splice(i, 1);
-						// 	//setTimeout(() => {
-						// 	// console.log("current node: " + currentNode?.outerHTML);
-						// 	// console.log("parent node: " + currentNode?.parentElement?.outerHTML);
-						// 	// console.log("uhhh " + currentNode?.nextElementSibling?.outerHTML);
-						// //}, 0);
-						// }
-						// console.log('Updated chunk', i, chunks[i].content);
-						// 	console.log("selection after: ", sel?.anchorNode?.textContent);
-						// 	console.log("index: ", sel?.anchorOffset);
-						// 	console.log("set selection to " + sel?.anchorNode?.textContent + " at " + ((sel?.anchorOffset || 0) - 1));
-						// setTimeout(() => {
-						// 	console.log("selection at set: ", sel?.anchorNode?.textContent);
-						// 	console.log("index: ", sel?.anchorOffset);
-						// 	if(node)
-						// 		window.getSelection()?.setPosition(node, index);
-						// }, 0);
-					}}
+					onkeydown={handleKeydown2}
 				></div>
+				
+					<!-- oninput={handleInput} -->
 			{/each}
 		</div>
 	</div>
@@ -671,19 +839,21 @@
 		display: inline-flex;
 		align-items: center;
 		vertical-align: middle;
-		line-height: 1.5 !important;
-		min-height: 1.5rem !important;
+		/* line-height: 1.5 !important; */
+		/* min-height: 1.5rem !important; */
 		font-size: inherit;
-	}
-
-	.text-chip {
-		min-height: 1.5rem;
-		line-height: 1.5;
-	}
-
-	.tag-chip {
+		min-width: 0.06125rem;
 		margin-inline: 0.25rem;
 	}
+
+	/* .text-chip {
+		min-height: 1.5rem;
+	 line-height: 1.5;
+	} */
+
+	/* .tag-chip {
+		margin-inline: 0rem;
+	} */
 
 	/* Ensure tag chips are visible on mobile */
 	@media (max-width: 768px) {
