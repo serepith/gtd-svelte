@@ -270,6 +270,12 @@
 
 		console.log("current node: " + currentNode?.outerHTML);
 
+		
+		if(!currentNode?.textContent?.trim() && e.code.length > 1) {
+			console.log("CURRENT CHUNK: " + currentChunk);
+			currentChunk.content = '';
+		}
+
 		// if (e.code === '#' || e.code === '/') {
 		// 	e.preventDefault();
 
@@ -451,12 +457,6 @@
 
 		console.log("current node: " + currentNode?.outerHTML);
 
-		
-
-		if(!currentNode?.textContent?.trim()) {
-			console.log("CURRENT CHUNK: " + currentChunk);
-			currentChunk.content = '';
-		}
 
 		if (e.data === '#' || e.data === '/') {
 			event.preventDefault();

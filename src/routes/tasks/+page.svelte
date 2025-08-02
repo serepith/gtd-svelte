@@ -44,7 +44,7 @@
 	let tasks = $derived(
 		(collections.nodes.filter((node) => node.type === 'task') as Task[]).filter(
 			(node) => (showCompleted || !node.completed) && (showArchived || !node.archived)
-		)
+		).sort((a, b) => b.createdAt - a.createdAt)
 	);
 
 	function handleTagClick(tag: any, event: MouseEvent) {
