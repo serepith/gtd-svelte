@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { firebase } from '$lib/globalState.svelte';
+	//import { firebase } from '$lib/globalState.svelte';
 	import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 	import TaskInputForm from './TaskInputForm.svelte';
 	// $effect(() => {
@@ -7,6 +7,7 @@
 	// });
 
 	import type { Snapshot } from './$types';
+	import { data } from '$lib/globalState.svelte';
 
 	let taskText = $state('');
 
@@ -17,13 +18,13 @@
 
 	// Handle login
 	async function handleLogin(event: Event) {
-		if (firebase.auth) {
+		if (data.auth) {
 			const provider = new GoogleAuthProvider();
-			const userCredential = await signInWithPopup(firebase.auth, provider);
-			console.log('User logged in:', firebase.user);
+			const userCredential = await signInWithPopup(data.auth, provider);
+			console.log('User logged in:', data.user);
 		} else {
 			console.error('Firebase Auth not initialized');
-			console.log(firebase, firebase.auth);
+			console.log(data, data.auth);
 		}
 	}
 </script>
@@ -38,7 +39,7 @@
 		class="grid flex-1 grid-cols-1 items-center justify-items-center-safe gap-4"
 		style="min-width: 25%;"
 	>
-		{#if !firebase.user}
+		{#if !data.user}
 			<button class="btn btn-soft btn-lg min-w-sm" onclick={(e) => handleLogin(e)}>Login</button>
 			<!-- {:else}
 			<TaskInputForm bind:taskText></TaskInputForm> -->

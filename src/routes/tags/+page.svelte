@@ -1,13 +1,14 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { collections } from '$lib/globalState.svelte';
+	import { data } from '$lib/globalState.svelte';
+	//import { collections } from '$lib/globalState.svelte';
 	import { Hash, Plus, ArrowRight } from '@lucide/svelte';
 
-	let allTags: Tag[] = $derived(collections.nodes.filter((node) => node.type === 'tag') as Tag[]);
+	let allTags: Tag[] = $derived(data.nodes.filter((node) => node.type === 'tag') as Tag[]);
 
 	// Calculate the number of tag equivalencies
 	let equivalenciesCount = $derived.by(() => {
-		return collections.junctions.filter(
+		return data.junctions.filter(
 			(junction) =>
 				junction.junctionType?.type === 'equivalency' &&
 				junction.parentType === 'tag' &&

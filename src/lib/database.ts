@@ -1,7 +1,8 @@
 import {
-	getJunctionsCollection,
-	getNodesCollection,
+	data,
+	// getJunctionsCollection,
 	graphNodeConverter,
+	// getNodesCollection,
 	tagConverter,
 	taskConverter
 } from '$lib/globalState.svelte';
@@ -17,7 +18,8 @@ import {
 	where
 } from 'firebase/firestore';
 
-import natural from 'natural';
+import { similarity } from '@nlpjs/similarity';
+import { diceCoefficient } from 'dice-coefficient';
 
 export async function addTask(
 	chunks: {
@@ -41,10 +43,12 @@ export async function addTask(
 		}
 	}
 
+	task = task.trim();
+
 	console.log('Adding task:', chunks, 'with tags:', tags);
 
-	const nodes = getNodesCollection();
-	const junctions = getJunctionsCollection();
+	const nodes = data.nodesCollection;
+	const junctions = data.junctionsCollection;
 
 	if (nodes && junctions) {
 		const taskRef = await addDoc(nodes, {
@@ -99,7 +103,7 @@ export async function addTask(
 export async function updateTask(id: string, update: Partial<Task>) {
 	console.log('Updating task:', id, update);
 
-	const nodes = getNodesCollection();
+	const nodes = data.nodesCollection;
 
 	if (nodes) {
 		const docRef = doc(nodes, id);
@@ -126,8 +130,8 @@ async function getRelations(
 	targetType?: 'task' | 'tag'
 ) {
 	let t1 = performance.now();
-	const junctions = getJunctionsCollection();
-	const nodes = getNodesCollection();
+	const junctions = data.junctionsCollection;
+	const nodes = data.nodesCollection;
 
 	let nodeIs;
 
@@ -192,13 +196,13 @@ export async function getSimilar(searchText: string, count?: number) {
 	const similarities = [];
 
 	for (const n of nodes) {
-		// TODO: implement similarity logic here
-		similarities.push({ node: n, similarity: natural.DiceCoefficient(searchText, n.name) });
+		similarities.push({ node: n, similarity: diceCoefficient(searchText, n.name) });
 	}
 
 	similarities.sort((a,b) => a.similarity - b.similarity);
 
-	// TODO: implement ranking logic here
+	console.log(similarities.slice(0,3));
+
 	if(count)
 		return similarities.slice(0, Math.min(similarities.length, count)).map((i) => i.node);
 	return similarities.slice(0, 3).map((i) => i.node);
@@ -211,7 +215,7 @@ export async function getTasksInTag(tagId: string) {
 export async function getTasksInTagWithEquivalents(
 	tagId: string
 ): Promise<Array<Task & { sourceTagId: string; sourceTagName: string; isEquivalent: boolean }>> {
-	const nodes = getNodesCollection();
+	const nodes = data.nodesCollection;
 	if (!nodes) {
 		console.error('No nodes collection found');
 		return [];
@@ -279,7 +283,7 @@ export async function getTagsForTask(taskId: string): Promise<Tag[]> {
 }
 
 export async function getTagId(tagName: string) {
-	let nodes = getNodesCollection();
+	let nodes = data.nodesCollection;
 	if (nodes)
 		return (
 			await getDocsFromCache(query(nodes, where('name', '==', tagName)).withConverter(tagConverter))
@@ -288,7 +292,7 @@ export async function getTagId(tagName: string) {
 }
 
 export async function getAllTags(): Promise<Tag[]> {
-	const nodes = getNodesCollection();
+	const nodes = data.nodesCollection;
 	if (!nodes) {
 		console.error('No nodes collection found');
 		return [];
@@ -300,13 +304,26 @@ export async function getAllTags(): Promise<Tag[]> {
 }
 
 export async function getAllTasks(): Promise<Task[]> {
-	const nodes = getNodesCollection();
+	const nodes = data.nodesCollection;
 	if (!nodes) {
 		console.error('No nodes collection found');
 		return [];
 	}
 
 	const q = query(nodes, where('type', '==', 'task')).withConverter(taskConverter);
+	const querySnapshot = await getDocsFromCache(q);
+	return querySnapshot.docs.map((doc) => doc.data());
+}
+
+
+export async function getAllNodes(): Promise<GraphNode[]> {
+	const nodes = data.nodesCollection;
+	if (!nodes) {
+		console.error('No nodes collection found');
+		return [];
+	}
+
+	const q = query(nodes).withConverter(graphNodeConverter);
 	const querySnapshot = await getDocsFromCache(q);
 	return querySnapshot.docs.map((doc) => doc.data());
 }
@@ -336,7 +353,7 @@ export async function createTagEquivalency(
 	displayName: string,
 	useOriginalName: boolean = false
 ) {
-	const junctions = getJunctionsCollection();
+	const junctions = data.junctionsCollection;
 
 	if (!junctions) {
 		console.error('No junctions collection found');
@@ -364,7 +381,7 @@ export async function createTagEquivalency(
 }
 
 export async function getTagEquivalencies(tagId: string): Promise<Junction[]> {
-	const junctions = getJunctionsCollection();
+	const junctions = data.junctionsCollection;
 
 	if (!junctions) {
 		console.error('No junctions collection found');
@@ -411,7 +428,7 @@ export async function getTagEquivalencies(tagId: string): Promise<Junction[]> {
 }
 
 export async function removeTagEquivalency(junctionId: string) {
-	const junctions = getJunctionsCollection();
+	const junctions = data.junctionsCollection;
 
 	if (!junctions) {
 		console.error('No junctions collection found');

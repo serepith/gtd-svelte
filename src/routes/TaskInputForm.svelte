@@ -1,13 +1,11 @@
 <script lang="ts">
-	import { addTask } from '$lib/database';
-	import { firebase } from '$lib/globalState.svelte';
-	import { tick } from 'svelte';
+	import { addTask, getAllTasks, getSimilar } from '$lib/database';
+	import { data } from '$lib/globalState.svelte';
+	// import { firebase, getNodesCollection } from '$lib/globalState.svelte';
 	import { fade, scale } from 'svelte/transition';
 
-	// Space character for tag boundaries
-	//const SEPARATOR_SPACE = '\u2002';
 
-	// bindings
+	
 	let { isSidebar = $bindable(false) } = $props();
 
 	let taskInputElement: HTMLDivElement | null = null;
@@ -23,15 +21,11 @@
 		}
 	}
 
-	//const chunk = (content?: string, type?: 'text' | 'tag') => new Chunk(content, type);
-
 	const chunk = (content: string = '', type = () => (content.includes('#') ? 'tag' : 'text')) => {
 		let t = $derived(content.includes('#'));
 		let c = { content, type };
 		return c;
 	};
-
-	type Chunk = { content: string; type: 'text' | 'tag' };
 
 	let chunks = $state([chunk('')]);
 
@@ -39,15 +33,123 @@
 		chunks.map((chunk) => (chunk.content.startsWith('#') ? 'tag' : 'text'))
 	);
 
-	// function getLastChild() {
-	// 	// node type 3 is text
-	// 		// if(taskInputElement?.lastChild?.nodeType === 3)
-	// 		// 	return taskInputElement?.lastChild?.parentElement;
+	// Auto-suggest state
+	//let suggestions = $state<Task[]>([]);
+	let showSuggestions = $state(false);
+	let selectedSuggestionIndex = $state(-1);
+	let suggestionTimeout: ReturnType<typeof setTimeout> | null = null;
 
-	// 		// // 1 is element
-	// 		// else if(taskInputElement?.lastChild?.nodeType === 1)
-	// 		// 	return taskInputElement?.lastChild as HTMLElement;
+	// Get the full text content from chunks for suggestions
+	const fullTextContent = $derived.by(() => {
+		return chunks
+			//.filter((chunk) => !chunk.content.startsWith('#'))
+			.map((chunk) => chunk.content)
+			.join('')
+			.trim();
+	});
+
+	let suggestions = $derived(getSimilar(fullTextContent));
+
+	// Update suggestions when text changes
+	async function updateSuggestions() {
+		if (suggestionTimeout) {
+			clearTimeout(suggestionTimeout);
+		}
+
+		const text = fullTextContent;
+		if (text.length < 2) {
+			showSuggestions = false;
+			return;
+		}
+
+		// suggestionTimeout = setTimeout(async () => {
+		// 	try {
+		// 		const similarTasks = await getSimilar(text, 5);
+		// 		// Filter out exact matches and empty tasks
+		// 		suggestions = similarTasks.filter(
+		// 			(task) => task.name.toLowerCase() !== text.toLowerCase() && task.name.trim().length > 0
+		// 		);
+		// 		showSuggestions = suggestions.length > 0;
+		// 		selectedSuggestionIndex = -1;
+		// 	} catch (error) {
+		// 		console.error('Error fetching suggestions:', error);
+		// 		showSuggestions = false;
+		// 		suggestions = [];
+		// 	}
+		// }, 300); // Debounce for 300ms
+	}
+
+	// Watch for text changes to trigger suggestions
+	// $effect(() => {
+	// 	fullTextContent;
+	// 	updateSuggestions();
+	// });
+
+	// Accept a suggestion
+	// function acceptSuggestion(suggestion: Task) {
+	// 	// Clear current text chunks
+	// 	chunks = [chunk('')];
+		
+	// 	// Set the suggestion text
+	// 	chunks[0].content = suggestion.name;
+		
+	// 	// Hide suggestions
+	// 	showSuggestions = false;
+	// 	suggestions = [];
+	// 	selectedSuggestionIndex = -1;
+		
+	// 	// Focus back on input
+	// 	setTimeout(() => {
+	// 		if (taskInputElement?.firstElementChild) {
+	// 			(taskInputElement.firstElementChild as HTMLElement).focus();
+	// 			// Position cursor at end
+	// 			const selection = window.getSelection();
+	// 			const range = document.createRange();
+	// 			const textNode = taskInputElement.firstElementChild.firstChild || taskInputElement.firstElementChild;
+	// 			range.setStart(textNode, suggestion.name.length);
+	// 			range.collapse(true);
+	// 			selection?.removeAllRanges();
+	// 			selection?.addRange(range);
+	// 		}
+	// 	}, 0);
 	// }
+
+	// Handle keyboard navigation for suggestions
+	function handleSuggestionNavigation(event: KeyboardEvent): boolean {
+		//if (!showSuggestions || suggestions.length === 0) return false;
+
+		switch (event.key) {
+			case 'ArrowDown':
+				event.preventDefault();
+				// selectedSuggestionIndex = Math.min(selectedSuggestionIndex + 1, suggestions.length - 1);
+				selectedSuggestionIndex = selectedSuggestionIndex + 1;
+
+				return true;
+			
+			case 'ArrowUp':
+				event.preventDefault();
+				selectedSuggestionIndex = Math.max(selectedSuggestionIndex - 1, -1);
+				return true;
+			
+			case 'Enter':
+			case 'Tab':
+				//&& selectedSuggestionIndex < suggestions.length
+				if (selectedSuggestionIndex >= 0 ) {
+					event.preventDefault();
+					//acceptSuggestion(suggestions[selectedSuggestionIndex]);
+					return true;
+				}
+				break;
+			
+			case 'Escape':
+				event.preventDefault();
+				showSuggestions = false;
+				//suggestions = [];
+				selectedSuggestionIndex = -1;
+				return true;
+		}
+		return false;
+	}
 
 	function getPrecedingChar() {
 		let sel = window.getSelection();
@@ -129,14 +231,6 @@
 		else return false;
 	}
 
-	function wouldCreateInvalidPair(key: string): boolean {
-		if (key !== '#' && key !== '/') return false;
-
-		if (getPrecedingChar() === '#') return true;
-
-		return false;
-	}
-
 	function addChunk(type: 'text' | 'tag') {
 		updateCurrentNode();
 
@@ -169,97 +263,13 @@
 		}, 0);
 	}
 
-	// Handle keyboard events
-	function handleKeydown(event: KeyboardEvent) {
+	const handleKeydown = (e: KeyboardEvent) => {
 		console.log('HANDLE KEYDOWN');
 
-		updateCurrentNode();
-
-
-		if (event.key === '#' || event.key === '/') {
-			event.preventDefault();
-
-			// no empty tags
-			if (getPrecedingChar() === '#') return;
-
-			const nodeText = currentNode?.textContent;
-
-			const textBeforeCursor = nodeText?.substring(0, currentNodeTextPosition) || '';
-			const textAfterCursor = nodeText?.substring(currentNodeTextPosition || nodeText?.length);
-
-			// console.log("substring 1: " + textBeforeCursor);
-			// console.log("substring 2: " + textAfterCursor);
-
-			currentChunk.content = textBeforeCursor;
-			//chunks.push(chunk('#' + textAfterCursor));
-			chunks.splice(currentNodeIndex + 1, 0, chunk('#' + textAfterCursor));
-			//chunks.push(chunk('#'));
-
-			if (currentNodeTextPosition)
-				currentNodeTextPosition = currentNodeTextPosition - textBeforeCursor.length + 1;
-
-			setTimeout(() => {
-				// console.log("current node: " + currentNode?.outerHTML);
-				// console.log("parent node: " + currentNode?.parentElement?.outerHTML);
-				// console.log("uhhh " + currentNode?.nextElementSibling?.outerHTML);
-				if (currentNode?.nextElementSibling) {
-					//alert("set pos to next sib"+ currentNode.nextSibling.parentElement?.outerHTML);
-					(currentNode.nextElementSibling as HTMLElement).focus();
-					window.getSelection()?.setPosition(currentNode.nextElementSibling, 1);
-					//updateCurrentNode();
-				}
-			}, 0);
-
+		// Handle suggestion navigation first
+		if (handleSuggestionNavigation(e)) {
 			return;
-		} 
-		
-		else if (event.key === 'Backspace') {
-			// if(currentNode?.dataset && currentNode?.dataset.itemId) {
-			// 	(chunks[parseInt(currentNode.dataset.itemId)]).type() = 'text';
-			// }
-			//console.log("text elngth " + currentNode?.textContent);
-			if (!currentNode?.textContent) spliceOutChunk(currentNodeIndex);
 		}
-
-		// Otherwise, if we're in a tag, handle escape characters
-		else if (isInTag()) {
-			if (event.key === 'Enter' || event.key === 'Tab' || event.key === 'Escape') {
-
-				console.log("key: " + event.key);
-				// If we're in a tag and hit an escape character, end the current tag
-				//insertCharacterAtCursor(SEPARATOR_SPACE);
-				event.preventDefault();
-				addChunk('text');
-
-				setTimeout(() => {
-					// console.log("current node: " + currentNode?.outerHTML);
-					// console.log("parent node: " + currentNode?.parentElement?.outerHTML);
-					// console.log("uhhh " + currentNode?.nextElementSibling?.outerHTML);
-					if (currentNode?.nextElementSibling) {
-						console.log('SET TO ' + (currentNode.nextElementSibling as HTMLElement).outerHTML);
-						//alert("set pos to next sib"+ currentNode.nextSibling.parentElement?.outerHTML);
-						(currentNode.nextElementSibling as HTMLElement).focus();
-						window.getSelection()?.setPosition(currentNode.nextElementSibling, 0);
-						//updateCurrentNode();
-					}
-				}, 0);
-			}
-			return;
-		} else if (event.key === 'Enter' && !event.shiftKey) {
-			// Regular Enter - submit
-			event.preventDefault();
-			handleSubmit(event);
-		}
-
-		//console.log('Cursor position after check: ', getCursorPosition());
-	}
-
-	function keydownTest(event: KeyboardEvent) {
-		console.log("KEYCODE: " + event.code);
-	}
-
-	const handleKeydown2 = (e: KeyboardEvent) => {
-		console.log('HANDLE KEYDOWN');
 
 		// console.log('updateCurrentNode exists?', typeof updateCurrentNode); // Should log "function"
 
@@ -538,60 +548,6 @@
 		//console.log('Cursor position after check: ', getCursorPosition());
 	}
 
-	function moveToClosestChild(x: number, y: number) {
-		if(taskInputElement) {
-			let closestChild = findClosestChild(
-				x,
-				y,
-				Array.from(taskInputElement.children) as HTMLElement[]
-			);
-
-			console.log("closest child: " + closestChild.outerHTML);
-
-			// Create synthetic click event for the child
-			const childRect = closestChild.getBoundingClientRect();
-
-			// Keep coordinates that are within bounds, clamp others
-			const clampedX =
-				x > (childRect.left + 1) && x < (childRect.right - 1)
-					? x // Keep original if within bounds
-					: Math.max(childRect.left + 1, Math.min(childRect.right - 1, x)); // Clamp if outside
-
-			const clampedY =
-				y > (childRect.top + 1) && y < (childRect.bottom - 1)
-					? y // Keep original if within bounds
-					: Math.max(childRect.top + 1, Math.min(childRect.bottom - 1, y)); // Clamp if outside
-
-			console.log('x ' + clampedX + ' y ' + clampedY);
-
-			//closestChild.focus();
-
-			// Just focus and position cursor manually
-			closestChild.focus();
-
-			// Use caretPositionFromPoint or caretRangeFromPoint
-			const position =
-				document.caretPositionFromPoint?.(clampedX, clampedY);
-
-			if (position) {
-				console.log("position: " + position.getClientRect()?.x + ", " + position.getClientRect()?.y);
-				const selection = window.getSelection();
-				selection?.removeAllRanges();
-
-				if ('offsetNode' in position) {
-					// caretPositionFromPoint result
-					const range = document.createRange();
-					range.setStart(position.offsetNode, position.offset);
-					range.collapse(true);
-					selection?.addRange(range);
-				} else {
-					// caretRangeFromPoint result
-					selection?.addRange(position);
-				}
-			}
-		}
-	}
-
 	function handleOnclick(event: MouseEvent) {
 		console.log('this element is: ' + (event.target as HTMLElement).outerHTML);
 
@@ -663,6 +619,12 @@
 		rect: DOMRect;
 	}
 
+	function distanceToRect(x: number, y: number, rect: DOMRect): number {
+		const dx = Math.max(rect.left - x, 0, x - rect.right);
+		const dy = Math.max(rect.top - y, 0, y - rect.bottom);
+		return Math.sqrt(dx * dx + dy * dy);
+	}
+
 	function findClosestChild(clickX: number, clickY: number, children: HTMLElement[]): HTMLElement {
 		// Get all bounding rectangles
 		const rects: ChildRect[] = children.map((child) => ({
@@ -720,10 +682,58 @@
 		}).child;
 	}
 
-	function distanceToRect(x: number, y: number, rect: DOMRect): number {
-		const dx = Math.max(rect.left - x, 0, x - rect.right);
-		const dy = Math.max(rect.top - y, 0, y - rect.bottom);
-		return Math.sqrt(dx * dx + dy * dy);
+	function moveToClosestChild(x: number, y: number) {
+		if(taskInputElement) {
+			let closestChild = findClosestChild(
+				x,
+				y,
+				Array.from(taskInputElement.children) as HTMLElement[]
+			);
+
+			console.log("closest child: " + closestChild.outerHTML);
+
+			// Create synthetic click event for the child
+			const childRect = closestChild.getBoundingClientRect();
+
+			// Keep coordinates that are within bounds, clamp others
+			const clampedX =
+				x > (childRect.left + 1) && x < (childRect.right - 1)
+					? x // Keep original if within bounds
+					: Math.max(childRect.left + 1, Math.min(childRect.right - 1, x)); // Clamp if outside
+
+			const clampedY =
+				y > (childRect.top + 1) && y < (childRect.bottom - 1)
+					? y // Keep original if within bounds
+					: Math.max(childRect.top + 1, Math.min(childRect.bottom - 1, y)); // Clamp if outside
+
+			console.log('x ' + clampedX + ' y ' + clampedY);
+
+			//closestChild.focus();
+
+			// Just focus and position cursor manually
+			closestChild.focus();
+
+			// Use caretPositionFromPoint or caretRangeFromPoint
+			const position =
+				document.caretPositionFromPoint?.(clampedX, clampedY);
+
+			if (position) {
+				console.log("position: " + position.getClientRect()?.x + ", " + position.getClientRect()?.y);
+				const selection = window.getSelection();
+				selection?.removeAllRanges();
+
+				if ('offsetNode' in position) {
+					// caretPositionFromPoint result
+					const range = document.createRange();
+					range.setStart(position.offsetNode, position.offset);
+					range.collapse(true);
+					selection?.addRange(range);
+				} else {
+					// caretRangeFromPoint result
+					selection?.addRange(position);
+				}
+			}
+		}
 	}
 
 	function taskTextEmpty() {
@@ -732,13 +742,12 @@
 		return chunks.length === 1 && (chunks[0].content.length === 0 || chunks[0].content === '<br>');
 	}
 
-	// Handle form submission
 	function handleSubmit(event: Event) {
 		console.log('HANDLE SUBMIT');
 
 		event.preventDefault();
 
-		if (!firebase.user) {
+		if (!data.user) {
 			alert('Please log in to add a task.');
 			return;
 		}
@@ -753,6 +762,11 @@
 			// state change unless we reset the content at index 0
 			chunks[0].content = '';
 		}
+
+		// Hide suggestions after submit
+		showSuggestions = false;
+		//suggestions = [];
+		selectedSuggestionIndex = -1;
 	}
 
 	
@@ -785,7 +799,7 @@
 			role="textbox"
 			tabindex="0"
 			onmousedown={handleOnclick}
-			onkeydown={(e) => { updateCurrentNode();  }}
+			onkeydown={() => { updateCurrentNode();  }}
 			class="textarea taskinput-textarea inset-0 flex flex-wrap"
 			style="min-height: 4.25rem; padding: 1rem 0.75rem; word-wrap: break-word; 
   		align-content: center;
@@ -801,15 +815,40 @@
 					tabindex={0}
 					transition:scale={{ duration: 50 }}
 					oninput={handleInput}
-					onkeydown={handleKeydown2}
+					onkeydown={handleKeydown}
 				></div>
 				
 					<!-- oninput={handleInput} -->
 			{/each}
 		</div>
+
+		<!-- Auto-suggest dropdown -->
+		{#if showSuggestions}
+		{#await suggestions}
+			Loading...
+		{:then suggestions}
+			<div 
+				class="absolute top-full left-0 right-0 bg-base-100 border border-base-300 rounded-lg shadow-lg mt-1 max-h-60 overflow-y-auto z-50"
+				transition:fade={{ duration: 150 }}
+			>
+				{#each suggestions as suggestion, index}
+					<button
+						type="button"
+						class="w-full text-left px-4 py-2 hover:bg-base-200 border-b border-base-200 last:border-b-0 transition-colors duration-150"
+						class:bg-primary={selectedSuggestionIndex === index}
+						class:text-primary-content={selectedSuggestionIndex === index}
+					>
+						<!-- onclick={() => acceptSuggestion(suggestion)} -->
+						<div class="font-medium truncate">{suggestion.name}</div>
+						<div class="text-sm text-base-content/70 truncate">Similar task</div>
+					</button>
+				{/each}
+			</div>
+		{/await}
+		{/if}
 	</div>
 
-	<button type="submit" class="btn btn-soft btn-lg m-2" class:btn-disabled={!firebase.user}
+	<button type="submit" class="btn btn-soft btn-lg m-2" class:btn-disabled={!data.user}
 		>Submit</button
 	>
 	<!-- {/if} -->

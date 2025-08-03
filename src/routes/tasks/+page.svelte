@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { getTagsForTask } from '$lib/database';
-	import { collections } from '$lib/globalState.svelte';
+	import { data } from '$lib/globalState.svelte';
 	import { Timestamp } from 'firebase/firestore';
 	//import CircleCheckBig from '@lucide/svelte/icons/circle-check-big';
 	import { updateTask } from '$lib/database';
@@ -41,11 +41,13 @@
 	// todo this seems like...a bad approach
 	let showCompleted = $state(false);
 	let showArchived = $state(false);
-	let tasks = $derived(
-		(collections.nodes.filter((node) => node.type === 'task') as Task[]).filter(
-			(node) => (showCompleted || !node.completed) && (showArchived || !node.archived)
-		).sort((a, b) => b.createdAt - a.createdAt)
-	);
+	// let tasks = $derived(
+	// 	(collections.nodes.filter((node) => node.type === 'task') as Task[]).filter(
+	// 		(node) => (showCompleted || !node.completed) && (showArchived || !node.archived)
+	// 	).sort((a, b) => b.createdAt - a.createdAt)
+	// );
+
+	let tasks = data.tasks;
 
 	function handleTagClick(tag: any, event: MouseEvent) {
 		console.log('Filter by tag:', tag.name);
@@ -150,94 +152,99 @@
 			</div>
 		</div>
 
-		{#if tasks.length === 0}
-			<div class="empty-state py-12 text-center">
-				<div class="mb-4 opacity-50">
-					<ListTodo size={48} class="text-base-content/30 mx-auto" />
+		{#await tasks}
+			Loading tasks...
+		{:then tasks} 
+			{#if !tasks || tasks.length === 0}
+				<div class="empty-state py-12 text-center">
+					<div class="mb-4 opacity-50">
+						<ListTodo size={48} class="text-base-content/30 mx-auto" />
+					</div>
+					<h3 class="text-base-content/70 mb-2 text-lg font-semibold">No tasks found</h3>
+					<p class="text-base-content/50 text-sm">
+						{#if !showCompleted && !showArchived}
+							All your tasks are completed or archived. Use the toggle buttons in the header to show
+							them.
+						{:else if showCompleted && !showArchived}
+							No completed tasks to show.
+						{:else if !showCompleted && showArchived}
+							No archived tasks to show.
+						{:else}
+							Create your first task to get started!
+						{/if}
+					</p>
 				</div>
-				<h3 class="text-base-content/70 mb-2 text-lg font-semibold">No tasks found</h3>
-				<p class="text-base-content/50 text-sm">
-					{#if !showCompleted && !showArchived}
-						All your tasks are completed or archived. Use the toggle buttons in the header to show
-						them.
-					{:else if showCompleted && !showArchived}
-						No completed tasks to show.
-					{:else if !showCompleted && showArchived}
-						No archived tasks to show.
-					{:else}
-						Create your first task to get started!
-					{/if}
-				</p>
-			</div>
-		{:else}
-			{#each tasks as task (task.id)}
-				<div
-					class="task-row hover-parent hover:bg-base-200/50 grid grid-cols-[fit-content(80%)_1fr_auto_auto] items-start gap-4 rounded-lg px-4 py-4 transition-all duration-200"
-					class:animating-out={animatingTasks.has(task.id || '')}
-					class:collapsing={collapsingTasks.has(task.id || '')}
-					animate:flip={{ duration: 200 }}
-				>
-					<div class="task-content">
-						<div class="task-text mb-1">{task.name}</div>
-						<div class="task-tags-display">
-							{#await getTagsForTask(task.id || '') then tags}
-								{#each tags as tag}
-									<button
-										class="tag-chip clickable-tag"
-										onclick={(e) => handleTagClick(tag, e)}
-										aria-label="Filter by tag {tag.name}"
-										title="Click to filter by this tag"
-									>
-										{tag.name}
-									</button>
-								{/each}
-							{:catch error}
-								<span class="error text-error text-xs">Error loading tags</span>
-							{/await}
+			{:else}
+				{#each tasks as task (task.id)}
+					<div
+						class="task-row hover-parent hover:bg-base-200/50 grid grid-cols-[fit-content(80%)_1fr_auto_auto] items-start gap-4 rounded-lg px-4 py-4 transition-all duration-200"
+						class:animating-out={animatingTasks.has(task.id || '')}
+						class:collapsing={collapsingTasks.has(task.id || '')}
+						animate:flip={{ duration: 200 }}
+					>
+						<div class="task-content">
+							<div class="task-text mb-1">{task.name}</div>
+							<div class="task-tags-display">
+								{#await getTagsForTask(task.id || '') then tags}
+									{#each tags as tag}
+										<button
+											class="tag-chip clickable-tag"
+											onclick={(e) => handleTagClick(tag, e)}
+											aria-label="Filter by tag {tag.name}"
+											title="Click to filter by this tag"
+										>
+											{tag.name}
+										</button>
+									{/each}
+								{:catch error}
+									<span class="error text-error text-xs">Error loading tags</span>
+								{/await}
+							</div>
+						</div>
+						<div></div>
+						<!-- Empty spacer column -->
+						<div class="task-date text-base-content/70 self-center text-sm">
+							{(task.createdAt as Timestamp).toDate().toLocaleDateString('en-US', {
+								weekday: 'short',
+								month: 'short',
+								day: 'numeric'
+							})}
+						</div>
+						<div class="task-actions self-center">
+							<!-- <button 
+							class="action-btn complete-btn"
+							class:active={task.completed}
+							onclick={() => handleComplete(task)}
+							aria-label="{task.completed ? 'Uncomplete' : 'Complete'} {task.name}"
+							title="{task.completed ? 'Mark as incomplete' : 'Mark as complete'}"
+						> -->
+							<AnimatedIcon iconType="complete" buttonType="action" bind:selected={task.completed} />
+							<!-- </button> -->
+							<!-- <button 
+							class="action-btn archive-btn"
+							class:active={task.archived}
+							onclick={() => handleArchive(task)}
+							aria-label="{task.archived ? 'Unarchive' : 'Archive'} {task.name}"
+							title="{task.archived ? 'Unarchive task' : 'Archive task'}"
+						>
+							<Archive />
+						</button> -->
+							<AnimatedIcon iconType="archive" buttonType="action" bind:selected={task.archived} />
+
+							<button
+								class="action-btn edit-btn"
+								onclick={() => handleEdit(task)}
+								aria-label="Edit {task.name}"
+								title="Edit task"
+							>
+								<Edit />
+							</button>
 						</div>
 					</div>
-					<div></div>
-					<!-- Empty spacer column -->
-					<div class="task-date text-base-content/70 self-center text-sm">
-						{(task.createdAt as Timestamp).toDate().toLocaleDateString('en-US', {
-							weekday: 'short',
-							month: 'short',
-							day: 'numeric'
-						})}
-					</div>
-					<div class="task-actions self-center">
-						<!-- <button 
-            class="action-btn complete-btn"
-            class:active={task.completed}
-            onclick={() => handleComplete(task)}
-            aria-label="{task.completed ? 'Uncomplete' : 'Complete'} {task.name}"
-            title="{task.completed ? 'Mark as incomplete' : 'Mark as complete'}"
-          > -->
-						<AnimatedIcon iconType="complete" buttonType="action" bind:selected={task.completed} />
-						<!-- </button> -->
-						<!-- <button 
-            class="action-btn archive-btn"
-            class:active={task.archived}
-            onclick={() => handleArchive(task)}
-            aria-label="{task.archived ? 'Unarchive' : 'Archive'} {task.name}"
-            title="{task.archived ? 'Unarchive task' : 'Archive task'}"
-          >
-            <Archive />
-          </button> -->
-						<AnimatedIcon iconType="archive" buttonType="action" bind:selected={task.archived} />
-
-						<button
-							class="action-btn edit-btn"
-							onclick={() => handleEdit(task)}
-							aria-label="Edit {task.name}"
-							title="Edit task"
-						>
-							<Edit />
-						</button>
-					</div>
-				</div>
-			{/each}
-		{/if}
+				{/each}
+			{/if}
+		{/await}
+		
 	</div>
 </section>
 

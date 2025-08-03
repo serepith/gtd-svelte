@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
-	import { uiState, firebase } from '$lib/globalState.svelte';
+	import { data, uiState } from '$lib/globalState.svelte';
 	import logo from '$lib/images/svelte-logo.svg';
 	import github from '$lib/images/github.svg';
 
@@ -9,7 +9,7 @@
 		e.preventDefault();
 
 		// If coming from homepage and user is logged in, show sidebar
-		if (page.url.pathname === '/' && firebase.user) {
+		if (page.url.pathname === '/' && data.user) {
 			uiState.sidebarVisible = true;
 		}
 

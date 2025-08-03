@@ -44,8 +44,9 @@
 	},
 	"dependencies": {
 		"@lucide/svelte": "^0.525.0",
+		"@nlpjs/similarity": "^5.0.0-alpha.5",
+		"dice-coefficient": "^2.1.1",
 		"firebase": "^11.9.1",
-		"natural": "^8.1.0",
 		"zod": "^3.25.67"
 	}
 }

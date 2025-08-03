@@ -3,20 +3,21 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { getTagsForTask, updateTask } from '$lib/database';
-	import { collections } from '$lib/globalState.svelte';
+	//import { collections } from '$lib/globalState.svelte';
 	import Save from '@lucide/svelte/icons/save';
 	import X from '@lucide/svelte/icons/x';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Calendar from '@lucide/svelte/icons/calendar';
 	import AnimatedIcon from '$lib/icons/AnimatedIcon.svelte';
 	import { Timestamp } from 'firebase/firestore';
+	import { data } from '$lib/globalState.svelte';
 
 	// Get the task ID from the URL parameter
 	let taskId = $page.params.slug;
 
 	// Find the task in our collections
 	let task = $derived(
-		collections.nodes.find((node) => node.id === taskId && node.type === 'task') as Task | undefined
+		data.nodes.find((node) => node.id === taskId && node.type === 'task') as Task | undefined
 	);
 
 	// Editable task properties
