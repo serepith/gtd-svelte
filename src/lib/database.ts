@@ -17,6 +17,8 @@ import {
 	where
 } from 'firebase/firestore';
 
+import natural from 'natural';
+
 export async function addTask(
 	chunks: {
 		content: string;
@@ -184,6 +186,24 @@ async function getRelations(
 	}
 }
 
+export async function getSimilar(searchText: string, count?: number) {
+	const nodes = await getAllTasks();
+
+	const similarities = [];
+
+	for (const n of nodes) {
+		// TODO: implement similarity logic here
+		similarities.push({ node: n, similarity: natural.DiceCoefficient(searchText, n.name) });
+	}
+
+	similarities.sort((a,b) => a.similarity - b.similarity);
+
+	// TODO: implement ranking logic here
+	if(count)
+		return similarities.slice(0, Math.min(similarities.length, count)).map((i) => i.node);
+	return similarities.slice(0, 3).map((i) => i.node);
+}
+
 export async function getTasksInTag(tagId: string) {
 	return (await getRelations(tagId, 'child', 'task')).map((doc) => doc as Task);
 }
@@ -275,6 +295,18 @@ export async function getAllTags(): Promise<Tag[]> {
 	}
 
 	const q = query(nodes, where('type', '==', 'tag')).withConverter(tagConverter);
+	const querySnapshot = await getDocsFromCache(q);
+	return querySnapshot.docs.map((doc) => doc.data());
+}
+
+export async function getAllTasks(): Promise<Task[]> {
+	const nodes = getNodesCollection();
+	if (!nodes) {
+		console.error('No nodes collection found');
+		return [];
+	}
+
+	const q = query(nodes, where('type', '==', 'task')).withConverter(taskConverter);
 	const querySnapshot = await getDocsFromCache(q);
 	return querySnapshot.docs.map((doc) => doc.data());
 }

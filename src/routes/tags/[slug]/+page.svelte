@@ -131,6 +131,7 @@
 		console.log('Edit task:', task.name);
 		// TODO: implement edit logic
 	}
+  }
 </script>
 
 <svelte:head>
