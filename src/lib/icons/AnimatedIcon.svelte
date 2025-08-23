@@ -9,13 +9,13 @@
 
 	interface AltText {
 		action: {
-			selected: string,
-			unselected: string
-		},
+			selected: string;
+			unselected: string;
+		};
 		filter: {
-			selected: string,
-			unselected: string
-		}
+			selected: string;
+			unselected: string;
+		};
 	}
 
 	type ButtonType = keyof AltText;
@@ -24,11 +24,11 @@
 		complete: {
 			staticPaths: ['M21.801 10A10 10 0 1 1 17 3.335'],
 			animatedPaths: [
-				{ 
-					path: 'm9 11 3 3L22 4', 
-					transition: draw, 
-					params: { duration: 200 }, 
-					visibility: 'checked' 
+				{
+					path: 'm9 11 3 3L22 4',
+					transition: draw,
+					params: { duration: 200 },
+					visibility: 'checked'
 				}
 			],
 			altText: {
@@ -68,9 +68,8 @@
 					unselected: 'Show archived tasks'
 				}
 			}
-
 		}
-	}
+	};
 
 	type IconType = keyof typeof iconData;
 
@@ -106,7 +105,9 @@
 		};
 	}
 
-	let altText = $derived(iconData[iconType].altText[buttonType][selected ? 'selected' : 'unselected']);
+	let altText = $derived(
+		iconData[iconType].altText[buttonType][selected ? 'selected' : 'unselected']
+	);
 	let staticPaths = $derived(iconData[iconType].staticPaths);
 	let animationPaths = $derived(iconData[iconType].animatedPaths);
 

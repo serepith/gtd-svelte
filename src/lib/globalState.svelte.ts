@@ -56,14 +56,10 @@ export class DataManager {
 	user: User | null = $state(null);
 
 	nodesCollection = $derived(
-		this.user?.uid && this.db
-			? collection(this.db, 'users', this.user?.uid, 'nodes')
-			: null
+		this.user?.uid && this.db ? collection(this.db, 'users', this.user?.uid, 'nodes') : null
 	);
 	junctionsCollection = $derived(
-		this.user && this.db
-			? collection(this.db, 'users', this.user?.uid, 'junctions')
-			: null
+		this.user && this.db ? collection(this.db, 'users', this.user?.uid, 'junctions') : null
 	);
 
 	nodes: GraphNode[] = $state([]);
@@ -82,10 +78,10 @@ export class DataManager {
 	tasks = $derived(this.nodes.filter((node) => node.type === 'task'));
 
 	// constructor() {
-  //   this.initFirebase();
-  // }
-  
-  initFirebase() {
+	//   this.initFirebase();
+	// }
+
+	initFirebase() {
 		console.log('Initializing Firebase...');
 
 		if (firebase.apps.length === 0) {
@@ -93,8 +89,7 @@ export class DataManager {
 			this.app = initializeApp(this.firebaseConfig);
 			this.db = getFirestore(this.app);
 			this.auth = getAuth(this.app);
-		}
-		else {
+		} else {
 			this.app = firebase.app();
 			this.db = getFirestore(this.app);
 			this.auth = getAuth(this.app);
@@ -131,7 +126,7 @@ export class DataManager {
 								//console.log("LISTENER FIRED ON " + doc.data().name);
 								return doc.data() as Task; // Adjust type as needed
 							});
-							console.log("this.nodes: " + this.nodes);
+							console.log('this.nodes: ' + this.nodes);
 						},
 						(error) => {
 							console.error('Error fetching nodes:', error);
@@ -157,9 +152,8 @@ export class DataManager {
 			console.log('Firebase Auth initialized');
 			console.log('Current user:', this.user);
 
-
 			// TODO clean this shit up
-			getAllNodes().then((n) => this.nodes = n);
+			getAllNodes().then((n) => (this.nodes = n));
 		} else {
 			console.error('Firebase Auth not initialized');
 			console.log(this.auth);
@@ -168,7 +162,6 @@ export class DataManager {
 }
 
 export const data = new DataManager();
-
 
 // if(firebase.apps.length === 0)
 

@@ -199,12 +199,11 @@ export async function getSimilar(searchText: string, count?: number) {
 		similarities.push({ node: n, similarity: diceCoefficient(searchText, n.name) });
 	}
 
-	similarities.sort((a,b) => a.similarity - b.similarity);
+	similarities.sort((a, b) => a.similarity - b.similarity);
 
-	console.log(similarities.slice(0,3));
+	console.log(similarities.slice(0, 3));
 
-	if(count)
-		return similarities.slice(0, Math.min(similarities.length, count)).map((i) => i.node);
+	if (count) return similarities.slice(0, Math.min(similarities.length, count)).map((i) => i.node);
 	return similarities.slice(0, 3).map((i) => i.node);
 }
 
@@ -314,7 +313,6 @@ export async function getAllTasks(): Promise<Task[]> {
 	const querySnapshot = await getDocsFromCache(q);
 	return querySnapshot.docs.map((doc) => doc.data());
 }
-
 
 export async function getAllNodes(): Promise<GraphNode[]> {
 	const nodes = data.nodesCollection;

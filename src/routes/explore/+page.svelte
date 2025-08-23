@@ -3,6 +3,6 @@
 	import HierarchicalGraph from './HierarchicalGraph.svelte';
 </script>
 
-<div class="flex flex-1 w-full h-full">
-  <HierarchicalGraph />
+<div class="flex h-full w-full flex-1">
+	<HierarchicalGraph />
 </div>

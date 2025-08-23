@@ -4,8 +4,6 @@
 	// import { firebase, getNodesCollection } from '$lib/globalState.svelte';
 	import { fade, scale } from 'svelte/transition';
 
-
-	
 	let { isSidebar = $bindable(false) } = $props();
 
 	let taskInputElement: HTMLDivElement | null = null;
@@ -41,11 +39,13 @@
 
 	// Get the full text content from chunks for suggestions
 	const fullTextContent = $derived.by(() => {
-		return chunks
-			//.filter((chunk) => !chunk.content.startsWith('#'))
-			.map((chunk) => chunk.content)
-			.join('')
-			.trim();
+		return (
+			chunks
+				//.filter((chunk) => !chunk.content.startsWith('#'))
+				.map((chunk) => chunk.content)
+				.join('')
+				.trim()
+		);
 	});
 
 	let suggestions = $derived(getSimilar(fullTextContent));
@@ -89,15 +89,15 @@
 	// function acceptSuggestion(suggestion: Task) {
 	// 	// Clear current text chunks
 	// 	chunks = [chunk('')];
-		
+
 	// 	// Set the suggestion text
 	// 	chunks[0].content = suggestion.name;
-		
+
 	// 	// Hide suggestions
 	// 	showSuggestions = false;
 	// 	suggestions = [];
 	// 	selectedSuggestionIndex = -1;
-		
+
 	// 	// Focus back on input
 	// 	setTimeout(() => {
 	// 		if (taskInputElement?.firstElementChild) {
@@ -125,22 +125,22 @@
 				selectedSuggestionIndex = selectedSuggestionIndex + 1;
 
 				return true;
-			
+
 			case 'ArrowUp':
 				event.preventDefault();
 				selectedSuggestionIndex = Math.max(selectedSuggestionIndex - 1, -1);
 				return true;
-			
+
 			case 'Enter':
 			case 'Tab':
 				//&& selectedSuggestionIndex < suggestions.length
-				if (selectedSuggestionIndex >= 0 ) {
+				if (selectedSuggestionIndex >= 0) {
 					event.preventDefault();
 					//acceptSuggestion(suggestions[selectedSuggestionIndex]);
 					return true;
 				}
 				break;
-			
+
 			case 'Escape':
 				event.preventDefault();
 				showSuggestions = false;
@@ -171,7 +171,6 @@
 	$inspect(currentNodeTextPosition).with(console.log);
 
 	function spliceOutChunk(i: number) {
-
 		updateCurrentNode();
 
 		let newFocus;
@@ -182,7 +181,7 @@
 			console.log('i=' + i + ' current node ndex ' + currentNodeIndex);
 			newFocus = i - 1;
 			newFocusOffset = chunks[i - 1].content.replace('<br>', '').length;
-			console.log("chunk content: " + chunks[i - 1].content);
+			console.log('chunk content: ' + chunks[i - 1].content);
 		}
 
 		chunks.splice(i, 1);
@@ -226,7 +225,7 @@
 	});
 
 	function isInTag(): boolean {
-		console.log("in tag");
+		console.log('in tag');
 		if (currentNode?.classList) return currentNode.classList.contains('tag-chip');
 		else return false;
 	}
@@ -245,8 +244,7 @@
 		const textBeforeCursor = nodeText?.substring(0, currentNodeTextPosition) || '';
 		let textAfterCursor = nodeText?.substring(currentNodeTextPosition || nodeText?.length);
 
-		if(textAfterCursor?.length === 0)
-			textAfterCursor = '&nbsp;';
+		if (textAfterCursor?.length === 0) textAfterCursor = '&nbsp;';
 
 		currentChunk.content = textBeforeCursor;
 		chunks.splice(currentNodeIndex + 1, 0, chunk(newChunkText + textAfterCursor));
@@ -278,11 +276,10 @@
 
 		updateCurrentNode();
 
-		console.log("current node: " + currentNode?.outerHTML);
+		console.log('current node: ' + currentNode?.outerHTML);
 
-		
-		if(!currentNode?.textContent?.trim() && e.code.length > 1) {
-			console.log("CURRENT CHUNK: " + currentChunk);
+		if (!currentNode?.textContent?.trim() && e.code.length > 1) {
+			console.log('CURRENT CHUNK: ' + currentChunk);
 			currentChunk.content = '';
 		}
 
@@ -322,63 +319,64 @@
 		// 	}, 0);
 
 		// 	return;
-		// } 
-		
+		// }
+
 		if (e.code === 'Backspace') {
 			// if(currentNode?.dataset && currentNode?.dataset.itemId) {
 			// 	(chunks[parseInt(currentNode.dataset.itemId)]).type() = 'text';
 			// }
 			//console.log("text elngth " + currentNode?.textContent);
 			if (!currentNode?.textContent) spliceOutChunk(currentNodeIndex);
-		}
-
-		else if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.code)) {
+		} else if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.code)) {
 			//claude code
 			const selection = window.getSelection();
-			const currentElement = selection?.anchorNode?.nodeType === 3 
-					? selection.anchorNode.parentElement 
-					: selection?.anchorNode as HTMLElement;
-			
+			const currentElement =
+				selection?.anchorNode?.nodeType === 3
+					? selection.anchorNode.parentElement
+					: (selection?.anchorNode as HTMLElement);
+
 			// Find current chunk index
 			const currentIndex = parseInt(currentElement?.dataset.itemId || '0');
 			const currentOffset = selection?.anchorOffset || 0;
 			const textLength = currentElement?.textContent?.length || 0;
-			
+
 			let shouldNavigate = false;
 			let targetIndex = currentIndex;
 			let targetPosition = 0;
-			
+
 			if (e.code === 'ArrowLeft' && currentOffset === 0) {
-					// At beginning of current chunk, go to previous
-					shouldNavigate = true;
-					targetIndex = Math.max(0, currentIndex - 1);
-					targetPosition = chunks[targetIndex]?.content?.length || 0; // End of previous chunk
+				// At beginning of current chunk, go to previous
+				shouldNavigate = true;
+				targetIndex = Math.max(0, currentIndex - 1);
+				targetPosition = chunks[targetIndex]?.content?.length || 0; // End of previous chunk
 			} else if (e.code === 'ArrowRight' && currentOffset === textLength) {
-					// At end of current chunk, go to next
-					shouldNavigate = true;
-					targetIndex = Math.min(chunks.length - 1, currentIndex + 1);
-					targetPosition = 0; // Beginning of next chunk
+				// At end of current chunk, go to next
+				shouldNavigate = true;
+				targetIndex = Math.min(chunks.length - 1, currentIndex + 1);
+				targetPosition = 0; // Beginning of next chunk
 			}
-			
+
 			if (shouldNavigate && targetIndex !== currentIndex) {
-					e.preventDefault();
-					
-					// Find the target element
-					const targetElement = document.querySelector(`[data-item-id="${targetIndex}"]`) as HTMLElement;
-					if (targetElement) {
-							targetElement.focus();
-							
-							// Set cursor position
-							if (targetElement.textContent) {
-									const range = document.createRange();
-									const textNode = targetElement.firstChild || targetElement;
-									range.setStart(textNode, Math.min(targetPosition, targetElement.textContent.length));
-									range.collapse(true);
-									
-									selection?.removeAllRanges();
-									selection?.addRange(range);
-							}
+				e.preventDefault();
+
+				// Find the target element
+				const targetElement = document.querySelector(
+					`[data-item-id="${targetIndex}"]`
+				) as HTMLElement;
+				if (targetElement) {
+					targetElement.focus();
+
+					// Set cursor position
+					if (targetElement.textContent) {
+						const range = document.createRange();
+						const textNode = targetElement.firstChild || targetElement;
+						range.setStart(textNode, Math.min(targetPosition, targetElement.textContent.length));
+						range.collapse(true);
+
+						selection?.removeAllRanges();
+						selection?.addRange(range);
 					}
+				}
 			}
 		}
 
@@ -400,16 +398,13 @@
 						(currentNode.nextElementSibling as HTMLElement).focus();
 						window.getSelection()?.setPosition(currentNode.nextElementSibling, 0);
 						//updateCurrentNode();
-						
+
 						updateCurrentNode();
 					}
 				}, 0);
-
 			}
 			return;
-		} 
-		
-		else if (e.code === 'Enter') {
+		} else if (e.code === 'Enter') {
 			//else if (event.data === 'Enter' && !event.shiftKey) {
 			// Regular Enter - submit
 			e.preventDefault();
@@ -417,7 +412,7 @@
 		}
 
 		//console.log('Cursor position after check: ', getCursorPosition());
-	}
+	};
 
 	const updateCurrentNode = () => {
 		// console.log("current node " + window.getSelection()?.anchorNode?.textContent);
@@ -429,10 +424,9 @@
 
 		const selection = window.getSelection();
 
-		if(selection) {
+		if (selection) {
 			// node type 3 is text
-			if (selection.anchorNode?.nodeType === 3)
-				currentNode = selection.anchorNode?.parentElement;
+			if (selection.anchorNode?.nodeType === 3) currentNode = selection.anchorNode?.parentElement;
 			// 1 is element
 			else if (selection.anchorNode?.nodeType === 1)
 				currentNode = window.getSelection()?.anchorNode as HTMLElement;
@@ -443,30 +437,25 @@
 					const rect = range.getBoundingClientRect();
 					moveToClosestChild(rect.x, rect.y);
 				}
-			}
-			else {
-				if (selection.anchorOffset)
-					currentNodeTextPosition = window.getSelection()?.anchorOffset;
+			} else {
+				if (selection.anchorOffset) currentNodeTextPosition = window.getSelection()?.anchorOffset;
 			}
 		}
-	}
+	};
 
 	// Handle keyboard events
 	const handleInput = (event: Event) => {
 		console.log('HANDLE INPUT');
 
 		console.log('updateCurrentNode exists?', typeof updateCurrentNode); // Should log "function"
-    
 
 		let e = event as InputEvent;
 
-		
 		console.log('INPUT: ' + e.data);
 
 		updateCurrentNode();
 
-		console.log("current node: " + currentNode?.outerHTML);
-
+		console.log('current node: ' + currentNode?.outerHTML);
 
 		if (e.data === '#' || e.data === '/') {
 			event.preventDefault();
@@ -504,9 +493,7 @@
 			}, 0);
 
 			return;
-		} 
-		
-		else if (e.data === 'Backspace') {
+		} else if (e.data === 'Backspace') {
 			// if(currentNode?.dataset && currentNode?.dataset.itemId) {
 			// 	(chunks[parseInt(currentNode.dataset.itemId)]).type() = 'text';
 			// }
@@ -536,9 +523,7 @@
 				}, 0);
 			}
 			return;
-		} 
-		
-		else if (e.data === 'Enter') {
+		} else if (e.data === 'Enter') {
 			//else if (event.data === 'Enter' && !event.shiftKey) {
 			// Regular Enter - submit
 			event.preventDefault();
@@ -546,13 +531,12 @@
 		}
 
 		//console.log('Cursor position after check: ', getCursorPosition());
-	}
+	};
 
 	function handleOnclick(event: MouseEvent) {
 		console.log('this element is: ' + (event.target as HTMLElement).outerHTML);
 
-		console.log("click x: " + event.clientX + ", click y: " + event.clientY);
-
+		console.log('click x: ' + event.clientX + ', click y: ' + event.clientY);
 
 		// Don't do anything if user clicked on a child div
 		if ((event.target as HTMLElement) != taskInputElement) {
@@ -561,7 +545,6 @@
 		}
 
 		event.preventDefault();
-
 
 		moveToClosestChild(event.clientX, event.clientY);
 
@@ -683,26 +666,26 @@
 	}
 
 	function moveToClosestChild(x: number, y: number) {
-		if(taskInputElement) {
+		if (taskInputElement) {
 			let closestChild = findClosestChild(
 				x,
 				y,
 				Array.from(taskInputElement.children) as HTMLElement[]
 			);
 
-			console.log("closest child: " + closestChild.outerHTML);
+			console.log('closest child: ' + closestChild.outerHTML);
 
 			// Create synthetic click event for the child
 			const childRect = closestChild.getBoundingClientRect();
 
 			// Keep coordinates that are within bounds, clamp others
 			const clampedX =
-				x > (childRect.left + 1) && x < (childRect.right - 1)
+				x > childRect.left + 1 && x < childRect.right - 1
 					? x // Keep original if within bounds
 					: Math.max(childRect.left + 1, Math.min(childRect.right - 1, x)); // Clamp if outside
 
 			const clampedY =
-				y > (childRect.top + 1) && y < (childRect.bottom - 1)
+				y > childRect.top + 1 && y < childRect.bottom - 1
 					? y // Keep original if within bounds
 					: Math.max(childRect.top + 1, Math.min(childRect.bottom - 1, y)); // Clamp if outside
 
@@ -714,11 +697,12 @@
 			closestChild.focus();
 
 			// Use caretPositionFromPoint or caretRangeFromPoint
-			const position =
-				document.caretPositionFromPoint?.(clampedX, clampedY);
+			const position = document.caretPositionFromPoint?.(clampedX, clampedY);
 
 			if (position) {
-				console.log("position: " + position.getClientRect()?.x + ", " + position.getClientRect()?.y);
+				console.log(
+					'position: ' + position.getClientRect()?.x + ', ' + position.getClientRect()?.y
+				);
 				const selection = window.getSelection();
 				selection?.removeAllRanges();
 
@@ -768,8 +752,6 @@
 		//suggestions = [];
 		selectedSuggestionIndex = -1;
 	}
-
-	
 </script>
 
 <svelte:document />
@@ -785,7 +767,7 @@
 		{#if taskTextEmpty()}
 			<div
 				class="textarea from-primary to-secondary pointer-events-none
-				absolute inset-0 bg-gradient-to-r bg-clip-text text-transparent flex align-text-bottom"
+				absolute inset-0 flex bg-gradient-to-r bg-clip-text align-text-bottom text-transparent"
 				style="z-index: 5; min-height: 4.25rem; padding: 1rem 1rem; word-wrap: break-word; 
 				overflow-wrap: break-word; white-space: pre-wrap; align-items: center; justify-content: flex-start;"
 			>
@@ -799,7 +781,9 @@
 			role="textbox"
 			tabindex="0"
 			onmousedown={handleOnclick}
-			onkeydown={() => { updateCurrentNode();  }}
+			onkeydown={() => {
+				updateCurrentNode();
+			}}
 			class="textarea taskinput-textarea inset-0 flex flex-wrap"
 			style="min-height: 4.25rem; padding: 1rem 0.75rem; word-wrap: break-word; 
   		align-content: center;
@@ -817,34 +801,34 @@
 					oninput={handleInput}
 					onkeydown={handleKeydown}
 				></div>
-				
-					<!-- oninput={handleInput} -->
+
+				<!-- oninput={handleInput} -->
 			{/each}
 		</div>
 
 		<!-- Auto-suggest dropdown -->
 		{#if showSuggestions}
-		{#await suggestions}
-			Loading...
-		{:then suggestions}
-			<div 
-				class="absolute top-full left-0 right-0 bg-base-100 border border-base-300 rounded-lg shadow-lg mt-1 max-h-60 overflow-y-auto z-50"
-				transition:fade={{ duration: 150 }}
-			>
-				{#each suggestions as suggestion, index}
-					<button
-						type="button"
-						class="w-full text-left px-4 py-2 hover:bg-base-200 border-b border-base-200 last:border-b-0 transition-colors duration-150"
-						class:bg-primary={selectedSuggestionIndex === index}
-						class:text-primary-content={selectedSuggestionIndex === index}
-					>
-						<!-- onclick={() => acceptSuggestion(suggestion)} -->
-						<div class="font-medium truncate">{suggestion.name}</div>
-						<div class="text-sm text-base-content/70 truncate">Similar task</div>
-					</button>
-				{/each}
-			</div>
-		{/await}
+			{#await suggestions}
+				Loading...
+			{:then suggestions}
+				<div
+					class="bg-base-100 border-base-300 absolute top-full right-0 left-0 z-50 mt-1 max-h-60 overflow-y-auto rounded-lg border shadow-lg"
+					transition:fade={{ duration: 150 }}
+				>
+					{#each suggestions as suggestion, index}
+						<button
+							type="button"
+							class="hover:bg-base-200 border-base-200 w-full border-b px-4 py-2 text-left transition-colors duration-150 last:border-b-0"
+							class:bg-primary={selectedSuggestionIndex === index}
+							class:text-primary-content={selectedSuggestionIndex === index}
+						>
+							<!-- onclick={() => acceptSuggestion(suggestion)} -->
+							<div class="truncate font-medium">{suggestion.name}</div>
+							<div class="text-base-content/70 truncate text-sm">Similar task</div>
+						</button>
+					{/each}
+				</div>
+			{/await}
 		{/if}
 	</div>
 

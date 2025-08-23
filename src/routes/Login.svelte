@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
-	import firebase from "firebase/compat/app";
+	import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+	import firebase from 'firebase/compat/app';
 
-  let { auth } = $props();
+	let { auth } = $props();
 
 	// Handle login
 	async function handleLogin(event: Event) {

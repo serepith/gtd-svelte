@@ -6,6 +6,5 @@ import firebase from 'firebase/compat/app';
 import { getFirestore } from 'firebase/firestore';
 
 export async function init() {
-	if(firebase.apps.length === 0)
-		data.initFirebase();
+	if (firebase.apps.length === 0) data.initFirebase();
 }

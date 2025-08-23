@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { useViewport } from "@xyflow/svelte";
+	import { useViewport } from '@xyflow/svelte';
 
-  let { viewport = $bindable() } = $props();
+	let { viewport = $bindable() } = $props();
 
-  viewport = useViewport();
+	viewport = useViewport();
 </script>

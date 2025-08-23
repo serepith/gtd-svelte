@@ -41,13 +41,24 @@
 	// todo this seems like...a bad approach
 	let showCompleted = $state(false);
 	let showArchived = $state(false);
+	let sortByDateAsc = $state(false);
 	// let tasks = $derived(
 	// 	(collections.nodes.filter((node) => node.type === 'task') as Task[]).filter(
 	// 		(node) => (showCompleted || !node.completed) && (showArchived || !node.archived)
 	// 	).sort((a, b) => b.createdAt - a.createdAt)
 	// );
 
-	let tasks = data.nodes;
+	let sortedTasks = $derived.by(() => {
+		const filtered = data.tasks.filter(
+			(task) => (showCompleted || !task.completed) && (showArchived || !task.archived)
+		);
+
+		return filtered.sort((a, b) => {
+			const aTime = (a.createdAt as Timestamp).toMillis();
+			const bTime = (b.createdAt as Timestamp).toMillis();
+			return sortByDateAsc ? aTime - bTime : bTime - aTime;
+		});
+	});
 
 	function handleTagClick(tag: any, event: MouseEvent) {
 		console.log('Filter by tag:', tag.name);
@@ -129,11 +140,22 @@
 	>
 		<!-- Table headers -->
 		<div
-			class="task-header border-primary/20 mb-4 grid grid-cols-[fit-content(80%)_1fr_auto_auto] items-center gap-4 border-b-2 px-4 py-4 text-lg font-bold"
+			class="task-header border-primary/20 mb-4 grid grid-cols-[fit-content(80%)_1fr_auto_auto_auto] items-center gap-4 border-b-2 px-4 py-4 text-lg font-bold"
 		>
 			<div class="text-primary">Tasks</div>
 			<div></div>
 			<!-- Empty column for spacing -->
+			<div class="text-right">
+				<button
+					class="sort-btn"
+					onclick={() => (sortByDateAsc = !sortByDateAsc)}
+					aria-label="Sort by date {sortByDateAsc ? 'oldest first' : 'newest first'}"
+					title="Sort by date {sortByDateAsc ? 'oldest first' : 'newest first'}"
+				>
+					<span class="text-sm font-medium">Date</span>
+					<span class="sort-arrow" class:flipped={sortByDateAsc}>↓</span>
+				</button>
+			</div>
 			<div class="text-right">
 				<AnimatedIcon
 					iconType="complete"
@@ -152,72 +174,72 @@
 			</div>
 		</div>
 
-			{#if data.tasks.length === 0}
-				<div class="empty-state py-12 text-center">
-					<div class="mb-4 opacity-50">
-						<ListTodo size={48} class="text-base-content/30 mx-auto" />
-					</div>
-					<h3 class="text-base-content/70 mb-2 text-lg font-semibold">No tasks found</h3>
-					<p class="text-base-content/50 text-sm">
-						{#if !showCompleted && !showArchived}
-							All your tasks are completed or archived. Use the toggle buttons in the header to show
-							them.
-						{:else if showCompleted && !showArchived}
-							No completed tasks to show.
-						{:else if !showCompleted && showArchived}
-							No archived tasks to show.
-						{:else}
-							Create your first task to get started!
-						{/if}
-					</p>
+		{#if sortedTasks.length === 0}
+			<div class="empty-state py-12 text-center">
+				<div class="mb-4 opacity-50">
+					<ListTodo size={48} class="text-base-content/30 mx-auto" />
 				</div>
-			{:else}
-				{#each data.tasks as task (task.id)}
-					<div
-						class="task-row hover-parent hover:bg-base-200/50 grid grid-cols-[fit-content(80%)_1fr_auto_auto] items-start gap-4 rounded-lg px-4 py-4 transition-all duration-200"
-						class:animating-out={animatingTasks.has(task.id || '')}
-						class:collapsing={collapsingTasks.has(task.id || '')}
-						animate:flip={{ duration: 200 }}
-					>
-						<div class="task-content">
-							<div class="task-text mb-1">{task.name}</div>
-							<div class="task-tags-display">
-								{#await getTagsForTask(task.id || '') then tags}
-									{#each tags as tag}
-										<button
-											class="tag-chip clickable-tag"
-											onclick={(e) => handleTagClick(tag, e)}
-											aria-label="Filter by tag {tag.name}"
-											title="Click to filter by this tag"
-										>
-											{tag.name}
-										</button>
-									{/each}
-								{:catch error}
-									<span class="error text-error text-xs">Error loading tags</span>
-								{/await}
-							</div>
+				<h3 class="text-base-content/70 mb-2 text-lg font-semibold">No tasks found</h3>
+				<p class="text-base-content/50 text-sm">
+					{#if !showCompleted && !showArchived}
+						All your tasks are completed or archived. Use the toggle buttons in the header to show
+						them.
+					{:else if showCompleted && !showArchived}
+						No completed tasks to show.
+					{:else if !showCompleted && showArchived}
+						No archived tasks to show.
+					{:else}
+						Create your first task to get started!
+					{/if}
+				</p>
+			</div>
+		{:else}
+			{#each sortedTasks as task (task.id)}
+				<div
+					class="task-row hover-parent hover:bg-base-200/50 grid grid-cols-[fit-content(80%)_1fr_auto_auto_auto] items-start gap-4 rounded-lg px-4 py-4 transition-all duration-200"
+					class:animating-out={animatingTasks.has(task.id || '')}
+					class:collapsing={collapsingTasks.has(task.id || '')}
+					animate:flip={{ duration: 200 }}
+				>
+					<div class="task-content">
+						<div class="task-text mb-1">{task.name}</div>
+						<div class="task-tags-display">
+							{#await getTagsForTask(task.id || '') then tags}
+								{#each tags as tag}
+									<button
+										class="tag-chip clickable-tag"
+										onclick={(e) => handleTagClick(tag, e)}
+										aria-label="Filter by tag {tag.name}"
+										title="Click to filter by this tag"
+									>
+										{tag.name}
+									</button>
+								{/each}
+							{:catch error}
+								<span class="error text-error text-xs">Error loading tags</span>
+							{/await}
 						</div>
-						<div></div>
-						<!-- Empty spacer column -->
-						<div class="task-date text-base-content/70 self-center text-sm">
-							{(task.createdAt as Timestamp).toDate().toLocaleDateString('en-US', {
-								weekday: 'short',
-								month: 'short',
-								day: 'numeric'
-							})}
-						</div>
-						<div class="task-actions self-center">
-							<!-- <button 
+					</div>
+					<div></div>
+					<!-- Empty spacer column -->
+					<div class="task-date text-base-content/70 self-center text-sm">
+						{(task.createdAt as Timestamp).toDate().toLocaleDateString('en-US', {
+							weekday: 'short',
+							month: 'short',
+							day: 'numeric'
+						})}
+					</div>
+					<div class="task-actions self-center">
+						<!-- <button 
 							class="action-btn complete-btn"
 							class:active={task.completed}
 							onclick={() => handleComplete(task)}
 							aria-label="{task.completed ? 'Uncomplete' : 'Complete'} {task.name}"
 							title="{task.completed ? 'Mark as incomplete' : 'Mark as complete'}"
 						> -->
-							<AnimatedIcon iconType="complete" buttonType="action" bind:selected={task.completed} />
-							<!-- </button> -->
-							<!-- <button 
+						<AnimatedIcon iconType="complete" buttonType="action" bind:selected={task.completed} />
+						<!-- </button> -->
+						<!-- <button 
 							class="action-btn archive-btn"
 							class:active={task.archived}
 							onclick={() => handleArchive(task)}
@@ -226,21 +248,20 @@
 						>
 							<Archive />
 						</button> -->
-							<AnimatedIcon iconType="archive" buttonType="action" bind:selected={task.archived} />
+						<AnimatedIcon iconType="archive" buttonType="action" bind:selected={task.archived} />
 
-							<button
-								class="action-btn edit-btn"
-								onclick={() => handleEdit(task)}
-								aria-label="Edit {task.name}"
-								title="Edit task"
-							>
-								<Edit />
-							</button>
-						</div>
+						<button
+							class="action-btn edit-btn"
+							onclick={() => handleEdit(task)}
+							aria-label="Edit {task.name}"
+							title="Edit task"
+						>
+							<Edit />
+						</button>
 					</div>
-				{/each}
-			{/if}
-		
+				</div>
+			{/each}
+		{/if}
 	</div>
 </section>
 
@@ -430,5 +451,32 @@
 	.archive-btn.active {
 		color: var(--color-warning);
 		background-color: rgb(from var(--color-warning) r g b / 0.15);
+	}
+
+	.sort-btn {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+		padding: 0.25rem 0.5rem;
+		border: none;
+		background: transparent;
+		cursor: pointer;
+		border-radius: 0.25rem;
+		transition: all 0.2s ease;
+		color: var(--color-base-content);
+	}
+
+	.sort-btn:hover {
+		background-color: var(--color-base-300);
+		transform: scale(1.05);
+	}
+
+	.sort-arrow {
+		transition: transform 0.2s ease;
+		font-size: 1rem;
+	}
+
+	.sort-arrow.flipped {
+		transform: rotate(180deg);
 	}
 </style>
