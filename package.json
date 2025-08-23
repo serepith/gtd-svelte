@@ -26,6 +26,7 @@
 		"@sveltejs/vite-plugin-svelte": "^5.0.0",
 		"@tailwindcss/forms": "^0.5.9",
 		"@tailwindcss/vite": "^4.0.0",
+		"@types/d3-force": "^3.0.10",
 		"daisyui": "^5.0.43",
 		"eslint": "^9.18.0",
 		"eslint-config-prettier": "^10.0.1",
@@ -45,8 +46,14 @@
 	"dependencies": {
 		"@lucide/svelte": "^0.525.0",
 		"@nlpjs/similarity": "^5.0.0-alpha.5",
+		"@xyflow/svelte": "^1.2.2",
+		"d3-drag": "^3.0.0",
+		"d3-force": "^3.0.0",
+		"d3-selection": "^3.0.0",
 		"dice-coefficient": "^2.1.1",
 		"firebase": "^11.9.1",
+		"graphology": "^0.26.0",
+		"sigma": "^3.0.2",
 		"zod": "^3.25.67"
 	}
 }

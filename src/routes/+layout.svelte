@@ -20,7 +20,7 @@
 			<TaskInputForm bind:isSidebar />
 		</div>
 
-		<main>
+		<main class="flex flex-1">
 			{#if children}
 				{@render children()}
 			{/if}

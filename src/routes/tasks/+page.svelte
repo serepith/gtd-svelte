@@ -47,7 +47,7 @@
 	// 	).sort((a, b) => b.createdAt - a.createdAt)
 	// );
 
-	let tasks = data.tasks;
+	let tasks = data.nodes;
 
 	function handleTagClick(tag: any, event: MouseEvent) {
 		console.log('Filter by tag:', tag.name);
@@ -123,7 +123,7 @@
 	}
 </script>
 
-<section>
+<section class="flex-1 items-center">
 	<div
 		class="task-table from-base-100 to-base-200 border-base-300 flex flex-col rounded-xl border bg-gradient-to-br p-6 shadow-xl"
 	>
@@ -152,10 +152,7 @@
 			</div>
 		</div>
 
-		{#await tasks}
-			Loading tasks...
-		{:then tasks} 
-			{#if !tasks || tasks.length === 0}
+			{#if data.tasks.length === 0}
 				<div class="empty-state py-12 text-center">
 					<div class="mb-4 opacity-50">
 						<ListTodo size={48} class="text-base-content/30 mx-auto" />
@@ -175,7 +172,7 @@
 					</p>
 				</div>
 			{:else}
-				{#each tasks as task (task.id)}
+				{#each data.tasks as task (task.id)}
 					<div
 						class="task-row hover-parent hover:bg-base-200/50 grid grid-cols-[fit-content(80%)_1fr_auto_auto] items-start gap-4 rounded-lg px-4 py-4 transition-all duration-200"
 						class:animating-out={animatingTasks.has(task.id || '')}
@@ -243,7 +240,6 @@
 					</div>
 				{/each}
 			{/if}
-		{/await}
 		
 	</div>
 </section>

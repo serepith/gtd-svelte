@@ -128,8 +128,10 @@ export class DataManager {
 						this.nodesCollection.withConverter(taskConverter),
 						(snapshot) => {
 							this.nodes = snapshot.docs.map((doc) => {
+								//console.log("LISTENER FIRED ON " + doc.data().name);
 								return doc.data() as Task; // Adjust type as needed
 							});
+							console.log("this.nodes: " + this.nodes);
 						},
 						(error) => {
 							console.error('Error fetching nodes:', error);
