@@ -196,10 +196,19 @@
 		{:else}
 			{#each sortedTasks as task (task.id)}
 				<div
-					class="task-row hover-parent hover:bg-base-200/50 grid grid-cols-[fit-content(80%)_1fr_auto_auto_auto] items-start gap-4 rounded-lg px-4 py-4 transition-all duration-200"
+					class="task-row hover-parent hover:bg-base-200/50 grid grid-cols-[fit-content(80%)_1fr_auto_auto_auto] items-start gap-4 rounded-lg px-4 py-4 transition-all duration-200 cursor-pointer"
 					class:animating-out={animatingTasks.has(task.id || '')}
 					class:collapsing={collapsingTasks.has(task.id || '')}
 					animate:flip={{ duration: 200 }}
+					role="button"
+					tabindex="0"
+					onclick={() => goto(`/tasks/${task.id}`)}
+					onkeydown={(e) => {
+						if (e.key === 'Enter' || e.key === ' ') {
+							e.preventDefault();
+							goto(`/tasks/${task.id}`);
+						}
+					}}
 				>
 					<div class="task-content">
 						<div class="task-text mb-1">{task.name}</div>
@@ -208,7 +217,10 @@
 								{#each tags as tag}
 									<button
 										class="tag-chip clickable-tag"
-										onclick={(e) => handleTagClick(tag, e)}
+										onclick={(e) => {
+											e.stopPropagation();
+											handleTagClick(tag, e);
+										}}
 										aria-label="Filter by tag {tag.name}"
 										title="Click to filter by this tag"
 									>
@@ -237,7 +249,9 @@
 							aria-label="{task.completed ? 'Uncomplete' : 'Complete'} {task.name}"
 							title="{task.completed ? 'Mark as incomplete' : 'Mark as complete'}"
 						> -->
-						<AnimatedIcon iconType="complete" buttonType="action" bind:selected={task.completed} />
+						<div onclick={(e) => e.stopPropagation()}>
+							<AnimatedIcon iconType="complete" buttonType="action" bind:selected={task.completed} />
+						</div>
 						<!-- </button> -->
 						<!-- <button 
 							class="action-btn archive-btn"
@@ -248,11 +262,16 @@
 						>
 							<Archive />
 						</button> -->
-						<AnimatedIcon iconType="archive" buttonType="action" bind:selected={task.archived} />
+						<div onclick={(e) => e.stopPropagation()}>
+							<AnimatedIcon iconType="archive" buttonType="action" bind:selected={task.archived} />
+						</div>
 
 						<button
 							class="action-btn edit-btn"
-							onclick={() => handleEdit(task)}
+							onclick={(e) => {
+								e.stopPropagation();
+								handleEdit(task);
+							}}
 							aria-label="Edit {task.name}"
 							title="Edit task"
 						>
