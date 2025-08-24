@@ -1,6 +1,8 @@
 {
 	"version": "0.2.0",
 	"configurations": [
+		
+
 		{
 			"name": "Vite Debug (Log level info)",
 			"request": "launch",
@@ -28,11 +30,19 @@
 		{
 			"name": "Firebase Emulators",
 			"request": "launch",
-			"runtimeArgs": ["emulators:start", "--only", "auth,firestore"],
+			"runtimeArgs": ["emulators:start", "--only", "auth,firestore", "--import", "../emulator-data", "--export-on-exit"],
 			"skipFiles": ["<node_internals>/**"],
 			"runtimeExecutable": "firebase",
 			"type": "node"
 		},
+		{
+      "name": "Firestore Emulator (persistent)",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "emu:firestore"],
+      "console": "integratedTerminal"
+    },
 		{
 			"name": "Client",
 			"type": "chrome",

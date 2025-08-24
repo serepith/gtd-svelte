@@ -1,11 +1,12 @@
 <script lang="ts">
-	import { addTask, getAllTasks, getSimilar } from '$lib/database';
+	import { addTask, getAllTasks, getSimilar, updateTask } from '$lib/database';
 	import { data } from '$lib/globalState.svelte';
 	import { createDebouncedSearch } from '$lib/semanticSearch';
 	import type { SearchResult } from '$lib/embeddings';
 	// import { firebase, getNodesCollection } from '$lib/globalState.svelte';
 	import { fade, scale } from 'svelte/transition';
-	import { CheckSquare, Hash } from '@lucide/svelte';
+	import { CheckSquare, Hash, Archive, ExternalLink } from '@lucide/svelte';
+	import { goto } from '$app/navigation';
 
 	let { isSidebar = $bindable(false) } = $props();
 
@@ -89,35 +90,42 @@
 		updateSuggestions();
 	});
 
-	// Accept a suggestion (replace current text with suggested duplicate)
-	function acceptSuggestion(result: SearchResult) {
-		const suggestion = result.item as Task;
+	// Handle clicking on a duplicate suggestion
+	async function handleDuplicateAction(result: SearchResult) {
+		const task = result.item as Task;
 		
-		// Clear current text chunks
-		chunks = [chunk('')];
-
-		// Set the suggestion text
-		chunks[0].content = suggestion.name;
-
-		// Hide suggestions
+		// Hide suggestions first
 		showSuggestions = false;
 		semanticResults = [];
 		selectedSuggestionIndex = -1;
-
-		// Focus back on input
-		setTimeout(() => {
-			if (taskInputElement?.firstElementChild) {
-				(taskInputElement.firstElementChild as HTMLElement).focus();
-				// Position cursor at end
-				const selection = window.getSelection();
-				const range = document.createRange();
-				const textNode = taskInputElement.firstElementChild.firstChild || taskInputElement.firstElementChild;
-				range.setStart(textNode, suggestion.name.length);
-				range.collapse(true);
-				selection?.removeAllRanges();
-				selection?.addRange(range);
+		isSearching = false;
+		
+		if (task.archived) {
+			// Unarchive the task and clear input
+			try {
+				await updateTask(task.id!, { archived: false });
+				console.log(`Unarchived task: ${task.name}`);
+				
+				// Clear the input since we've reactivated an existing task
+				chunks = [chunk('')];
+				chunks[0].content = '';
+				
+				// Navigate to the unarchived task
+				await goto(`/tasks/${task.id}`);
+			} catch (error) {
+				console.error('Error unarchiving task:', error);
+				alert('Failed to unarchive task. Please try again.');
 			}
-		}, 0);
+		} else {
+			// Navigate to the existing active task
+			await goto(`/tasks/${task.id}`);
+		}
+	}
+
+	// Accept a suggestion (replace current text with suggested duplicate) - kept for keyboard navigation
+	function acceptSuggestion(result: SearchResult) {
+		// For keyboard navigation, just trigger the same action as clicking
+		handleDuplicateAction(result);
 	}
 
 	// Format similarity percentage
@@ -833,38 +841,55 @@
 				{:else}
 					<div class="bg-warning/10 border-warning/20 border-b p-3">
 						<div class="text-warning font-medium text-sm flex items-center gap-2">
-							⚠️ Potential duplicates found
+							⚠️ Similar tasks found
 						</div>
 						<div class="text-base-content/70 text-xs mt-1">
-							Click to use existing task or press Escape to continue
+							Active tasks: click to view • Archived tasks: click to unarchive & view • Press Escape to continue
 						</div>
 					</div>
 					{#each semanticResults as result, index}
+						{@const task = result.item as Task}
 						<button
 							type="button"
-							onclick={() => acceptSuggestion(result)}
+							onclick={() => handleDuplicateAction(result)}
 							class="hover:bg-base-200 focus:bg-base-200 flex w-full items-center gap-3 border-b border-base-200 p-3 text-left transition-colors duration-150 last:border-b-0 focus:outline-none"
 							class:bg-primary={selectedSuggestionIndex === index}
 							class:text-primary-content={selectedSuggestionIndex === index}
 						>
 							<div class="flex-shrink-0">
-								<CheckSquare class="text-primary h-4 w-4" />
+								{#if task.archived}
+									<Archive class="text-orange-500 h-4 w-4" />
+								{:else}
+									<CheckSquare class="text-primary h-4 w-4" />
+								{/if}
 							</div>
 							<div class="min-w-0 flex-1">
-								<div class="truncate font-medium">{result.item.name}</div>
+								<div class="truncate font-medium flex items-center gap-2">
+									{result.item.name}
+									{#if task.archived}
+										<span class="text-orange-500 text-xs px-2 py-0.5 bg-orange-100 dark:bg-orange-900/20 rounded-full">
+											Archived
+										</span>
+									{/if}
+								</div>
 								<div class="text-base-content/60 flex items-center gap-2 text-xs">
 									<span>{formatSimilarity(result.similarity)} match</span>
 									<span class="separator">•</span>
-									<span>Click to replace</span>
+									{#if task.archived}
+										<span class="text-orange-600 dark:text-orange-400">Click to unarchive & view</span>
+									{:else}
+										<span class="text-blue-600 dark:text-blue-400">Click to view task</span>
+									{/if}
 								</div>
 							</div>
-							<div class="flex-shrink-0">
+							<div class="flex-shrink-0 flex items-center gap-2">
 								<div class="bg-base-300 h-2 w-12 rounded-full">
 									<div
 										class="from-warning to-error h-full rounded-full bg-gradient-to-r"
 										style="width: {result.similarity * 100}%"
 									></div>
 								</div>
+								<ExternalLink class="h-3 w-3 text-base-content/40" />
 							</div>
 						</button>
 					{/each}
