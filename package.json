@@ -55,6 +55,7 @@
 	"dependencies": {
 		"@lucide/svelte": "^0.525.0",
 		"@nlpjs/similarity": "^5.0.0-alpha.5",
+		"@xenova/transformers": "^2.17.2",
 		"@xyflow/svelte": "^1.2.2",
 		"d3-drag": "^3.0.0",
 		"d3-force": "^3.0.0",

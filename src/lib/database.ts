@@ -10,6 +10,7 @@ import {
 	addDoc,
 	doc,
 	DocumentReference,
+	getDoc,
 	getDocs,
 	getDocsFromCache,
 	query,
@@ -20,6 +21,7 @@ import {
 
 import { similarity } from '@nlpjs/similarity';
 import { diceCoefficient } from 'dice-coefficient';
+import { generateEmbedding, needsEmbedding, getModelVersion } from './embeddings';
 
 export async function addTask(
 	chunks: {
@@ -61,6 +63,21 @@ export async function addTask(
 		});
 		console.log('Task added to collection:', task, taskRef.id);
 
+		// Generate embedding for the new task in the background
+		if (task.trim()) {
+			generateAndStoreEmbedding({
+				id: taskRef.id,
+				name: task,
+				type: 'task',
+				createdAt: Timestamp.now(),
+				updatedAt: Timestamp.now(),
+				completed: false,
+				archived: false
+			}).catch((error) => {
+				console.warn('Failed to generate embedding for new task:', error);
+			});
+		}
+
 		for (const tag of tags) {
 			const q = query(nodes, where('name', '==', tag));
 			const querySnapshot = await getDocs(q);
@@ -77,6 +94,17 @@ export async function addTask(
 					type: 'tag'
 				})) as DocumentReference<Tag>;
 				console.log('Created new tag:', tag, tagRef.id);
+
+				// Generate embedding for the new tag in the background
+				generateAndStoreEmbedding({
+					id: tagRef.id,
+					name: tag,
+					type: 'tag',
+					createdAt: Timestamp.now(),
+					updatedAt: Timestamp.now()
+				}).catch((error) => {
+					console.warn('Failed to generate embedding for new tag:', error);
+				});
 			} else {
 				// If a tag already exists, use the first one found
 				const doc = querySnapshot.docs[0];
@@ -436,4 +464,128 @@ export async function removeTagEquivalency(junctionId: string) {
 	const docRef = doc(junctions, junctionId);
 	await updateDoc(docRef, { archived: true });
 	console.log('Removed tag equivalency:', junctionId);
+}
+
+/**
+ * Generate and store embedding for a task or tag
+ */
+export async function generateAndStoreEmbedding(item: Task | Tag): Promise<void> {
+	if (!item.id) {
+		console.error('Cannot generate embedding for item without ID');
+		return;
+	}
+
+	try {
+		console.log(`🔄 Generating embedding for "${item.name}"...`);
+		const embedding = await generateEmbedding(item.name);
+		const modelVersion = getModelVersion();
+
+		console.log(`📊 Generated embedding:`, {
+			dimensions: embedding.length,
+			modelVersion,
+			sample: embedding.slice(0, 5),
+			isArray: Array.isArray(embedding)
+		});
+
+		const nodes = data.nodesCollection;
+		if (!nodes) {
+			console.error('No nodes collection found');
+			return;
+		}
+
+		const docRef = doc(nodes, item.id);
+		
+		// Convert embedding to plain array to ensure Firestore compatibility
+		const embeddingArray = Array.from(embedding);
+		
+		console.log(`💾 Storing to Firestore:`, {
+			embedding: embeddingArray.slice(0, 3) + '...',
+			embeddingModelVersion: modelVersion,
+			isArrayFromEmbedding: Array.isArray(embeddingArray)
+		});
+
+		await updateDoc(docRef, {
+			embedding: embeddingArray,
+			embeddingModelVersion: modelVersion,
+			updatedAt: Timestamp.now()
+		});
+
+		console.log(`✅ Generated and stored embedding for "${item.name}"`);
+		
+		// Verify it was saved by reading it back
+		const updatedDoc = await getDoc(docRef);
+		const savedData = updatedDoc.data();
+		console.log(`🔍 Verification - saved data:`, {
+			hasEmbedding: !!savedData?.embedding,
+			embeddingLength: savedData?.embedding?.length,
+			hasModelVersion: !!savedData?.embeddingModelVersion,
+			modelVersion: savedData?.embeddingModelVersion
+		});
+		
+	} catch (error) {
+		console.error(`❌ Error generating embedding for "${item.name}":`, error);
+	}
+}
+
+/**
+ * Ensure all tasks and tags have current embeddings
+ * This function can be called to backfill embeddings for existing data
+ */
+export async function ensureAllEmbeddings(): Promise<void> {
+	console.log('Starting embedding generation for all items...');
+
+	const allNodes = await getAllNodes();
+	const itemsNeedingEmbeddings = allNodes.filter(needsEmbedding);
+
+	if (itemsNeedingEmbeddings.length === 0) {
+		console.log('All items already have current embeddings');
+		return;
+	}
+
+	console.log(`Generating embeddings for ${itemsNeedingEmbeddings.length} items...`);
+
+	// Process in batches to avoid overwhelming the system
+	const BATCH_SIZE = 5;
+	for (let i = 0; i < itemsNeedingEmbeddings.length; i += BATCH_SIZE) {
+		const batch = itemsNeedingEmbeddings.slice(i, i + BATCH_SIZE);
+
+		// Process batch in parallel
+		const promises = batch.map((item) => generateAndStoreEmbedding(item));
+		await Promise.all(promises);
+
+		console.log(
+			`Processed batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(itemsNeedingEmbeddings.length / BATCH_SIZE)}`
+		);
+
+		// Small delay between batches to be respectful
+		if (i + BATCH_SIZE < itemsNeedingEmbeddings.length) {
+			await new Promise((resolve) => setTimeout(resolve, 500));
+		}
+	}
+
+	console.log('Embedding generation complete!');
+}
+
+/**
+ * Get all tasks and tags that have embeddings (for search)
+ */
+export async function getAllItemsWithEmbeddings(): Promise<(Task | Tag)[]> {
+	console.log('🗄️ Getting all items with embeddings...');
+	const allNodes = await getAllNodes();
+	console.log('📋 Total nodes from database:', allNodes.length);
+	
+	const itemsWithEmbeddings = allNodes.filter((item) => {
+		const hasEmbedding = !!item.embedding;
+		const hasModelVersion = !!item.embeddingModelVersion;
+		console.log(`Item "${item.name}":`, { 
+			hasEmbedding, 
+			hasModelVersion, 
+			embeddingLength: item.embedding?.length,
+			modelVersion: item.embeddingModelVersion
+		});
+		return hasEmbedding && hasModelVersion;
+	});
+	
+	console.log('✅ Items with embeddings:', itemsWithEmbeddings.length);
+	return itemsWithEmbeddings;
 }

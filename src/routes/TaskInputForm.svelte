@@ -1,8 +1,11 @@
 <script lang="ts">
 	import { addTask, getAllTasks, getSimilar } from '$lib/database';
 	import { data } from '$lib/globalState.svelte';
+	import { createDebouncedSearch } from '$lib/semanticSearch';
+	import type { SearchResult } from '$lib/embeddings';
 	// import { firebase, getNodesCollection } from '$lib/globalState.svelte';
 	import { fade, scale } from 'svelte/transition';
+	import { CheckSquare, Hash } from '@lucide/svelte';
 
 	let { isSidebar = $bindable(false) } = $props();
 
@@ -31,11 +34,11 @@
 		chunks.map((chunk) => (chunk.content.startsWith('#') ? 'tag' : 'text'))
 	);
 
-	// Auto-suggest state
-	//let suggestions = $state<Task[]>([]);
+	// Auto-suggest state for duplicate detection
+	let semanticResults = $state<SearchResult[]>([]);
 	let showSuggestions = $state(false);
 	let selectedSuggestionIndex = $state(-1);
-	let suggestionTimeout: ReturnType<typeof setTimeout> | null = null;
+	let isSearching = $state(false);
 
 	// Get the full text content from chunks for suggestions
 	const fullTextContent = $derived.by(() => {
@@ -48,82 +51,88 @@
 		);
 	});
 
-	let suggestions = $derived(getSimilar(fullTextContent));
+	// Create debounced semantic search function for duplicate detection
+	const debouncedSemanticSearch = createDebouncedSearch(300);
 
-	// Update suggestions when text changes
-	async function updateSuggestions() {
-		if (suggestionTimeout) {
-			clearTimeout(suggestionTimeout);
-		}
-
+	// Update suggestions when text changes using semantic search
+	function updateSuggestions() {
 		const text = fullTextContent;
-		if (text.length < 2) {
+		
+		// Only search if text is substantial enough
+		if (text.length < 3) {
 			showSuggestions = false;
+			semanticResults = [];
+			isSearching = false;
 			return;
 		}
 
-		// suggestionTimeout = setTimeout(async () => {
-		// 	try {
-		// 		const similarTasks = await getSimilar(text, 5);
-		// 		// Filter out exact matches and empty tasks
-		// 		suggestions = similarTasks.filter(
-		// 			(task) => task.name.toLowerCase() !== text.toLowerCase() && task.name.trim().length > 0
-		// 		);
-		// 		showSuggestions = suggestions.length > 0;
-		// 		selectedSuggestionIndex = -1;
-		// 	} catch (error) {
-		// 		console.error('Error fetching suggestions:', error);
-		// 		showSuggestions = false;
-		// 		suggestions = [];
-		// 	}
-		// }, 300); // Debounce for 300ms
+		// Start loading state
+		isSearching = true;
+		showSuggestions = true;
+
+		// Use semantic search to find similar tasks for duplicate detection
+		debouncedSemanticSearch(text, (results) => {
+			console.log('Duplicate detection results for:', text, results);
+			// Show only tasks (since we're adding a task) - keep high similarity matches as these are potential duplicates
+			semanticResults = results
+				.filter(result => result.type === 'task')
+				.slice(0, 3); // Limit to top 3 potential duplicates
+			console.log('Filtered semantic results:', semanticResults);
+			isSearching = false;
+			selectedSuggestionIndex = -1;
+		}, 5); // Get up to 5 results to filter from
 	}
 
-	// Watch for text changes to trigger suggestions
-	// $effect(() => {
-	// 	fullTextContent;
-	// 	updateSuggestions();
-	// });
+	// Watch for text changes to trigger duplicate detection
+	$effect(() => {
+		fullTextContent;
+		updateSuggestions();
+	});
 
-	// Accept a suggestion
-	// function acceptSuggestion(suggestion: Task) {
-	// 	// Clear current text chunks
-	// 	chunks = [chunk('')];
+	// Accept a suggestion (replace current text with suggested duplicate)
+	function acceptSuggestion(result: SearchResult) {
+		const suggestion = result.item as Task;
+		
+		// Clear current text chunks
+		chunks = [chunk('')];
 
-	// 	// Set the suggestion text
-	// 	chunks[0].content = suggestion.name;
+		// Set the suggestion text
+		chunks[0].content = suggestion.name;
 
-	// 	// Hide suggestions
-	// 	showSuggestions = false;
-	// 	suggestions = [];
-	// 	selectedSuggestionIndex = -1;
+		// Hide suggestions
+		showSuggestions = false;
+		semanticResults = [];
+		selectedSuggestionIndex = -1;
 
-	// 	// Focus back on input
-	// 	setTimeout(() => {
-	// 		if (taskInputElement?.firstElementChild) {
-	// 			(taskInputElement.firstElementChild as HTMLElement).focus();
-	// 			// Position cursor at end
-	// 			const selection = window.getSelection();
-	// 			const range = document.createRange();
-	// 			const textNode = taskInputElement.firstElementChild.firstChild || taskInputElement.firstElementChild;
-	// 			range.setStart(textNode, suggestion.name.length);
-	// 			range.collapse(true);
-	// 			selection?.removeAllRanges();
-	// 			selection?.addRange(range);
-	// 		}
-	// 	}, 0);
-	// }
+		// Focus back on input
+		setTimeout(() => {
+			if (taskInputElement?.firstElementChild) {
+				(taskInputElement.firstElementChild as HTMLElement).focus();
+				// Position cursor at end
+				const selection = window.getSelection();
+				const range = document.createRange();
+				const textNode = taskInputElement.firstElementChild.firstChild || taskInputElement.firstElementChild;
+				range.setStart(textNode, suggestion.name.length);
+				range.collapse(true);
+				selection?.removeAllRanges();
+				selection?.addRange(range);
+			}
+		}, 0);
+	}
+
+	// Format similarity percentage
+	function formatSimilarity(similarity: number): string {
+		return Math.round(similarity * 100) + '%';
+	}
 
 	// Handle keyboard navigation for suggestions
 	function handleSuggestionNavigation(event: KeyboardEvent): boolean {
-		//if (!showSuggestions || suggestions.length === 0) return false;
+		if (!showSuggestions || semanticResults.length === 0) return false;
 
 		switch (event.key) {
 			case 'ArrowDown':
 				event.preventDefault();
-				// selectedSuggestionIndex = Math.min(selectedSuggestionIndex + 1, suggestions.length - 1);
-				selectedSuggestionIndex = selectedSuggestionIndex + 1;
-
+				selectedSuggestionIndex = Math.min(selectedSuggestionIndex + 1, semanticResults.length - 1);
 				return true;
 
 			case 'ArrowUp':
@@ -133,10 +142,9 @@
 
 			case 'Enter':
 			case 'Tab':
-				//&& selectedSuggestionIndex < suggestions.length
-				if (selectedSuggestionIndex >= 0) {
+				if (selectedSuggestionIndex >= 0 && selectedSuggestionIndex < semanticResults.length) {
 					event.preventDefault();
-					//acceptSuggestion(suggestions[selectedSuggestionIndex]);
+					acceptSuggestion(semanticResults[selectedSuggestionIndex]);
 					return true;
 				}
 				break;
@@ -144,7 +152,7 @@
 			case 'Escape':
 				event.preventDefault();
 				showSuggestions = false;
-				//suggestions = [];
+				semanticResults = [];
 				selectedSuggestionIndex = -1;
 				return true;
 		}
@@ -749,8 +757,9 @@
 
 		// Hide suggestions after submit
 		showSuggestions = false;
-		//suggestions = [];
+		semanticResults = [];
 		selectedSuggestionIndex = -1;
+		isSearching = false;
 	}
 </script>
 
@@ -806,29 +815,61 @@
 			{/each}
 		</div>
 
-		<!-- Auto-suggest dropdown -->
+		<!-- Duplicate detection dropdown -->
 		{#if showSuggestions}
-			{#await suggestions}
-				Loading...
-			{:then suggestions}
-				<div
-					class="bg-base-100 border-base-300 absolute top-full right-0 left-0 z-50 mt-1 max-h-60 overflow-y-auto rounded-lg border shadow-lg"
-					transition:fade={{ duration: 150 }}
-				>
-					{#each suggestions as suggestion, index}
+			<div
+				class="bg-base-100 border-base-300 absolute top-full right-0 left-0 z-50 mt-1 max-h-60 overflow-y-auto rounded-lg border shadow-lg"
+				transition:fade={{ duration: 150 }}
+			>
+				{#if isSearching}
+					<div class="text-base-content/70 flex items-center justify-center p-4 text-sm">
+						<div class="loading loading-spinner loading-sm mr-2"></div>
+						Checking for duplicates...
+					</div>
+				{:else if semanticResults.length === 0}
+					<div class="text-base-content/70 p-4 text-center text-sm">
+						✅ No similar tasks found above threshold
+					</div>
+				{:else}
+					<div class="bg-warning/10 border-warning/20 border-b p-3">
+						<div class="text-warning font-medium text-sm flex items-center gap-2">
+							⚠️ Potential duplicates found
+						</div>
+						<div class="text-base-content/70 text-xs mt-1">
+							Click to use existing task or press Escape to continue
+						</div>
+					</div>
+					{#each semanticResults as result, index}
 						<button
 							type="button"
-							class="hover:bg-base-200 border-base-200 w-full border-b px-4 py-2 text-left transition-colors duration-150 last:border-b-0"
+							onclick={() => acceptSuggestion(result)}
+							class="hover:bg-base-200 focus:bg-base-200 flex w-full items-center gap-3 border-b border-base-200 p-3 text-left transition-colors duration-150 last:border-b-0 focus:outline-none"
 							class:bg-primary={selectedSuggestionIndex === index}
 							class:text-primary-content={selectedSuggestionIndex === index}
 						>
-							<!-- onclick={() => acceptSuggestion(suggestion)} -->
-							<div class="truncate font-medium">{suggestion.name}</div>
-							<div class="text-base-content/70 truncate text-sm">Similar task</div>
+							<div class="flex-shrink-0">
+								<CheckSquare class="text-primary h-4 w-4" />
+							</div>
+							<div class="min-w-0 flex-1">
+								<div class="truncate font-medium">{result.item.name}</div>
+								<div class="text-base-content/60 flex items-center gap-2 text-xs">
+									<span>{formatSimilarity(result.similarity)} match</span>
+									<span class="separator">•</span>
+									<span>Click to replace</span>
+								</div>
+							</div>
+							<div class="flex-shrink-0">
+								<div class="bg-base-300 h-2 w-12 rounded-full">
+									<div
+										class="from-warning to-error h-full rounded-full bg-gradient-to-r"
+										style="width: {result.similarity * 100}%"
+									></div>
+								</div>
+							</div>
 						</button>
 					{/each}
-				</div>
-			{/await}
+				{/if}
+			</div>
 		{/if}
 	</div>
 
