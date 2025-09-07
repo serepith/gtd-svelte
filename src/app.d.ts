@@ -17,7 +17,7 @@ declare global {
 		updatedAt: Timestamp;
 		completed: boolean;
 		archived: boolean;
-		embedding?: number[];
+		embedding?: Float32Array;
 		embeddingModelVersion?: string;
 	};
 	type Tag = {
@@ -26,7 +26,7 @@ declare global {
 		type: 'tag';
 		createdAt: Timestamp;
 		updatedAt: Timestamp;
-		embedding?: number[];
+		embedding?: Float32Array;
 		embeddingModelVersion?: string;
 	};
 	type GraphNode = Task | Tag;

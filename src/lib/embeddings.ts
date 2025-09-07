@@ -1,4 +1,5 @@
-import { pipeline, env } from '@xenova/transformers';
+import { pipeline, env, FeatureExtractionPipeline, type DataArray } from '@xenova/transformers';
+import { parentPort, workerData } from "node:worker_threads";
 
 // Configuration
 const MODEL_NAME = 'Xenova/all-MiniLM-L6-v2';
@@ -10,7 +11,10 @@ env.allowRemoteModels = true;
 env.allowLocalModels = false;
 
 // Cache for the transformer pipeline
-let embeddingPipeline: any = null;
+let embeddingPipeline: FeatureExtractionPipeline | null = null;
+
+interface EmbedJob { text: string }
+interface EmbedResult { vector: ArrayBuffer }
 
 /**
  * Initialize and cache the embedding pipeline
@@ -18,7 +22,7 @@ let embeddingPipeline: any = null;
 async function getEmbeddingPipeline() {
 	if (!embeddingPipeline) {
 		console.log('Loading embedding model...');
-		embeddingPipeline = await pipeline('feature-extraction', MODEL_NAME);
+		embeddingPipeline = await pipeline('feature-extraction', MODEL_NAME) as FeatureExtractionPipeline;
 		console.log('Embedding model loaded successfully');
 	}
 	return embeddingPipeline;
@@ -27,7 +31,7 @@ async function getEmbeddingPipeline() {
 /**
  * Generate embedding for a given text
  */
-export async function generateEmbedding(text: string): Promise<number[]> {
+export async function generateEmbedding(text: string) {
 	if (!text.trim()) {
 		throw new Error('Cannot generate embedding for empty text');
 	}
@@ -39,11 +43,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 			normalize: true
 		});
 
-		// Convert tensor to array
-		const embedding = Array.from(output.data);
-
-		console.log(`Generated embedding for "${text}" (${embedding.length} dimensions)`);
-		return embedding;
+		return output;
 	} catch (error) {
 		console.error('Error generating embedding:', error);
 		throw error;
@@ -53,7 +53,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 /**
  * Calculate cosine similarity between two embeddings
  */
-export function cosineSimilarity(a: number[], b: number[]): number {
+export function cosineSimilarity(a: Float32Array, b: Float32Array): number {
 	if (a.length !== b.length) {
 		throw new Error('Embeddings must have the same length');
 	}
@@ -120,7 +120,8 @@ export async function findSimilarItems(
 
 	try {
 		// Generate embedding for search query
-		const queryEmbedding = await generateEmbedding(query);
+		const queryEmbeddingTensor = await generateEmbedding(query);
+		const queryEmbedding = queryEmbeddingTensor.to('float32').data as Float32Array;
 
 		// Calculate similarities for ALL items (for debugging)
 		const allSimilarities: Array<{item: Task | Tag, similarity: number, type: 'task' | 'tag'}> = [];
@@ -173,4 +174,20 @@ export async function findSimilarItems(
 		console.error('Error in semantic search:', error);
 		return [];
 	}
+}
+
+
+if(parentPort) {
+	parentPort.on("message", async (payload) => {
+		const out = await generateEmbedding(payload.text);
+		const f32 = out.to('float32');                 // built-in dtype conversion
+		const vec: Float32Array = f32.data as Float32Array;  // now safely a Float32Array
+
+		// Narrow ArrayBufferLike to ArrayBuffer for the transfer list
+		const buf = vec.buffer as ArrayBuffer;
+
+		const result: EmbedResult = { vector: buf };
+		if(parentPort)
+			parentPort.postMessage(result, [buf]); // transfer, not copy
+	});
 }

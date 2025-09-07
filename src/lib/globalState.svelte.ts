@@ -260,14 +260,14 @@ const taskConverter: FirestoreDataConverter<Task> = {
 	},
 	fromFirestore: (snapshot: QueryDocumentSnapshot, options: SnapshotOptions): Task => {
 		const data = snapshot.data(options);
-		console.log('🔄 Loading task from Firestore:', {
-			name: data.name,
-			hasEmbedding: !!data.embedding,
-			embeddingLength: data.embedding?.length,
-			embeddingType: typeof data.embedding,
-			hasModelVersion: !!data.embeddingModelVersion,
-			modelVersion: data.embeddingModelVersion
-		});
+		// console.log('🔄 Loading task from Firestore:', {
+		// 	name: data.name,
+		// 	hasEmbedding: !!data.embedding,
+		// 	embeddingLength: data.embedding?.length,
+		// 	embeddingType: typeof data.embedding,
+		// 	hasModelVersion: !!data.embeddingModelVersion,
+		// 	modelVersion: data.embeddingModelVersion
+		// });
 		return {
 			id: snapshot.id,
 			name: data.name,
@@ -302,14 +302,14 @@ const tagConverter: FirestoreDataConverter<Tag> = {
 	},
 	fromFirestore: (snapshot: QueryDocumentSnapshot, options: SnapshotOptions): Tag => {
 		const data = snapshot.data(options);
-		console.log('🔄 Loading tag from Firestore:', {
-			name: data.name,
-			hasEmbedding: !!data.embedding,
-			embeddingLength: data.embedding?.length,
-			embeddingType: typeof data.embedding,
-			hasModelVersion: !!data.embeddingModelVersion,
-			modelVersion: data.embeddingModelVersion
-		});
+		// console.log('🔄 Loading tag from Firestore:', {
+		// 	name: data.name,
+		// 	hasEmbedding: !!data.embedding,
+		// 	embeddingLength: data.embedding?.length,
+		// 	embeddingType: typeof data.embedding,
+		// 	hasModelVersion: !!data.embeddingModelVersion,
+		// 	modelVersion: data.embeddingModelVersion
+		// });
 		return {
 			id: snapshot.id,
 			name: data.name,

@@ -8,6 +8,7 @@ import {
 } from '$lib/globalState.svelte';
 import {
 	addDoc,
+	CollectionReference,
 	doc,
 	DocumentReference,
 	getDoc,
@@ -16,12 +17,120 @@ import {
 	query,
 	Timestamp,
 	updateDoc,
-	where
+	where,
+	type DocumentData
 } from 'firebase/firestore';
 
 import { similarity } from '@nlpjs/similarity';
 import { diceCoefficient } from 'dice-coefficient';
 import { generateEmbedding, needsEmbedding, getModelVersion } from './embeddings';
+import { fi } from 'zod/v4/locales';
+
+async function makeNode(nodeText: string, nodeType: 'task' | 'tag', nodes: CollectionReference<DocumentData, DocumentData>) {
+	const startTime = performance.now();
+	
+	if(nodeText.trim()) {
+		let nodeData: Task | Tag;
+
+		if(nodeType === 'task') 
+			nodeData = { 
+			name: nodeText,
+			createdAt: Timestamp.now(),
+			updatedAt: Timestamp.now(),
+			type: 'task', 
+			completed: false, 
+			archived: false };
+		else nodeData = { 
+			name: nodeText,
+			createdAt: Timestamp.now(),
+			updatedAt: Timestamp.now(),
+			type: 'tag' };
+
+		const nodeRef = await addDoc(nodes, nodeData);
+
+		console.log(`${nodeType} added to collection:`, nodeData, nodeRef.id);
+
+		const endTime = performance.now();
+
+		console.log(`Node creation took ${endTime - startTime} ms.`);
+
+		// Generate embedding for the new task in the background
+		generateAndStoreEmbedding(nodeData).catch((error) => {
+			console.warn(`Failed to generate embedding for new ${nodeType}:`, error);
+		});
+
+		if(nodeType === 'task')
+			return nodeRef as DocumentReference<Task>;
+		else return nodeRef as DocumentReference<Tag>;
+	}
+
+	console.log("Node text empty!");
+	return null;
+}
+
+// internal function--create task and add to database
+async function makeTask(nodeText: string, nodes: CollectionReference<DocumentData, DocumentData>) {
+	const startTime = performance.now();
+	
+	if(nodeText.trim()) {
+		let nodeData = { 
+			name: nodeText,
+			createdAt: Timestamp.now(),
+			updatedAt: Timestamp.now(),
+			type: 'task', 
+			completed: false, 
+			archived: false } as Task;
+
+		const nodeRef = await addDoc(nodes, nodeData);
+
+		console.log(`Task added to collection:`, nodeData, nodeRef.id);
+
+		const endTime = performance.now();
+
+		console.log(`Node creation took ${endTime - startTime} ms.`);
+
+		// Generate embedding for the new task in the background
+		generateAndStoreEmbedding(nodeData).catch((error) => {
+			console.warn(`Failed to generate embedding for new task:`, error);
+		});
+
+		return nodeRef as DocumentReference<Task>;
+	}
+
+	console.log("Node text empty!");
+	return null;
+}
+
+// internal function--create tag and add to database
+async function makeTag(nodeText: string, nodes: CollectionReference<DocumentData, DocumentData>) {
+	const startTime = performance.now();
+	
+	if(nodeText.trim()) {
+		let nodeData = { 
+			name: nodeText,
+			createdAt: Timestamp.now(),
+			updatedAt: Timestamp.now(),
+			type: 'tag' } as Tag;
+
+		const nodeRef = await addDoc(nodes, nodeData);
+
+		console.log(`Tag added to collection:`, nodeData, nodeRef.id);
+
+		const endTime = performance.now();
+
+		console.log(`Node creation took ${endTime - startTime} ms.`);
+
+		// Generate embedding for the new task in the background
+		generateAndStoreEmbedding(nodeData).catch((error) => {
+			console.warn(`Failed to generate embedding for new task:`, error);
+		});
+
+		return nodeRef as DocumentReference<Tag>;
+	}
+
+	console.log("Node text empty!");
+	return null;
+}
 
 export async function addTask(
 	chunks: {
@@ -33,13 +142,8 @@ export async function addTask(
 	let tags = [] as string[];
 
 	for (const chunk of chunks) {
-		console.log(chunk.type, chunk.content);
 		if (chunk.type() === 'tag') {
-			// if(chunk.type === 'tag') {
-			//   task += chunk.content;
-			// }
 			tags.push(chunk.content.substring(1)); // Remove the leading '#' or '/'
-			console.log('Found tag:', chunk.content);
 		} else if (chunk.type() === 'text') {
 			task += chunk.content;
 		}
@@ -47,39 +151,30 @@ export async function addTask(
 
 	task = task.trim();
 
-	console.log('Adding task:', chunks, 'with tags:', tags);
+	const nodes = data.nodesCollection;
+	const junctions = data.junctionsCollection;
 
+	if (nodes && junctions && task) {
+		const taskRef = await makeTask(task, nodes);
+
+		if(taskRef) {
+			for (const tag of tags) {
+				addTagToTask(tag, taskRef.id);
+			}
+		} else {
+			console.error('❌ Failed to create task!');
+		}
+	} else {
+		console.error('❌ Missing nodes or junctions collection!');
+	}
+}
+
+export async function addTagToTask(tagName: string, taskId: string) {
 	const nodes = data.nodesCollection;
 	const junctions = data.junctionsCollection;
 
 	if (nodes && junctions) {
-		const taskRef = await addDoc(nodes, {
-			name: task,
-			createdAt: Timestamp.now(),
-			updatedAt: Timestamp.now(),
-			completed: false,
-			archived: false,
-			type: 'task'
-		});
-		console.log('Task added to collection:', task, taskRef.id);
-
-		// Generate embedding for the new task in the background
-		if (task.trim()) {
-			generateAndStoreEmbedding({
-				id: taskRef.id,
-				name: task,
-				type: 'task',
-				createdAt: Timestamp.now(),
-				updatedAt: Timestamp.now(),
-				completed: false,
-				archived: false
-			}).catch((error) => {
-				console.warn('Failed to generate embedding for new task:', error);
-			});
-		}
-
-		for (const tag of tags) {
-			const q = query(nodes, where('name', '==', tag));
+		const q = query(nodes, where('name', '==', tagName));
 			const querySnapshot = await getDocs(q);
 			let tagRef = null as DocumentReference<Tag> | null;
 
@@ -87,97 +182,33 @@ export async function addTask(
 			// but there might be no tag at all
 			if (querySnapshot.empty) {
 				// If no tag exists, create a new tag
-				tagRef = (await addDoc(nodes, {
-					name: tag,
-					createdAt: Timestamp.now(),
-					updatedAt: Timestamp.now(),
-					type: 'tag'
-				})) as DocumentReference<Tag>;
-				console.log('Created new tag:', tag, tagRef.id);
-
-				// Generate embedding for the new tag in the background
-				generateAndStoreEmbedding({
-					id: tagRef.id,
-					name: tag,
-					type: 'tag',
-					createdAt: Timestamp.now(),
-					updatedAt: Timestamp.now()
-				}).catch((error) => {
-					console.warn('Failed to generate embedding for new tag:', error);
-				});
+				tagRef = await makeTag(tagName, nodes);
+				if(tagRef)
+					console.log('✅ Created new tag:', tagName, tagRef.id);
+				else console.log("❌ Failed to create new tag " + tagName + "!");
 			} else {
-				// If a tag already exists, use the first one found
+				// If a tag already exists, use the first one found (which should be the only one)
+				if(querySnapshot.docs.length > 1)
+					console.log(`‼️ More than one identical tag "${tagName}" found!`);
 				const doc = querySnapshot.docs[0];
 				tagRef = doc.ref as DocumentReference<Tag>;
-				console.log('Using existing tag:', tag, tagRef.id);
+				console.log('🏷️ Using existing tag:', tagName, tagRef.id);
 			}
 
-			// Create a junction between task and tag
-			const junctionRef = await addDoc(junctions, {
-				parentId: tagRef.id,
-				childId: taskRef.id,
-				createdAt: Timestamp.now(),
-				parentType: 'tag',
-				childType: 'task'
-			});
-
-			console.log('Created junction:', tag, task, junctionRef.id);
-		}
+			if(tagRef && taskId) {
+				// Create a junction between task and tag
+				const junctionRef = await addDoc(junctions, {
+					parentId: tagRef.id,
+					childId: taskId,
+					createdAt: Timestamp.now(),
+					parentType: 'tag',
+					childType: 'task'
+				});
+				
+				console.log('✅ Created junction:', tagName, taskId, junctionRef.id);
+			}
 	} else {
-		console.error('Missing nodes or junctions collection');
-	}
-}
-
-export async function addTagToTask(tag: string, taskRef: DocumentReference) {
-	const nodes = data.nodesCollection;
-	const junctions = data.junctionsCollection;
-
-	if (nodes && junctions) {
-		const q = query(nodes, where('name', '==', tag));
-		const querySnapshot = await getDocs(q);
-		let tagRef = null as DocumentReference<Tag> | null;
-
-		// there should NOT be more than one tag with the same name
-		// but there might be no tag at all
-		if (querySnapshot.empty) {
-			// If no tag exists, create a new tag
-			tagRef = (await addDoc(nodes, {
-				name: tag,
-				createdAt: Timestamp.now(),
-				updatedAt: Timestamp.now(),
-				type: 'tag'
-			})) as DocumentReference<Tag>;
-			console.log('Created new tag:', tag, tagRef.id);
-
-			// Generate embedding for the new tag in the background
-			generateAndStoreEmbedding({
-				id: tagRef.id,
-				name: tag,
-				type: 'tag',
-				createdAt: Timestamp.now(),
-				updatedAt: Timestamp.now()
-			}).catch((error) => {
-				console.warn('Failed to generate embedding for new tag:', error);
-			});
-		} else {
-			// If a tag already exists, use the first one found
-			const doc = querySnapshot.docs[0];
-			tagRef = doc.ref as DocumentReference<Tag>;
-			console.log('Using existing tag:', tag, tagRef.id);
-		}
-
-		// Create a junction between task and tag
-		const junctionRef = await addDoc(junctions, {
-			parentId: tagRef.id,
-			childId: taskRef.id,
-			createdAt: Timestamp.now(),
-			parentType: 'tag',
-			childType: 'task'
-		});
-
-		console.log('Created junction:', tag, taskRef, junctionRef.id);
-	} else {
-		console.error('Missing nodes or junctions collection');
+		console.error('❌ Missing nodes or junctions collection!');
 	}
 
 }
@@ -252,7 +283,7 @@ export async function getRelations(
 	});
 
 	if (targetIds.length > 0) {
-		console.log('Found relations for node:', nodeId, targetIds);
+		//console.log('Found relations for node:', nodeId, targetIds);
 
 		let converter;
 		if (targetType === 'tag') converter = tagConverter;
@@ -370,6 +401,16 @@ export async function getTagId(tagName: string) {
 			await getDocsFromCache(query(nodes, where('name', '==', tagName)).withConverter(tagConverter))
 		).docs[0].data() as Tag;
 	return null;
+}
+
+export async function getNodeId(nodeName: string) {
+	let nodes = data.nodesCollection;
+	if (nodes)
+		return (
+			await getDocsFromCache(query(nodes, where('name', '==', nodeName)).withConverter(graphNodeConverter))
+		).docs[0].data();
+	return null;
+
 }
 
 export async function getAllTags(): Promise<Tag[]> {
@@ -524,6 +565,8 @@ export async function removeTagEquivalency(junctionId: string) {
  * Generate and store embedding for a task or tag
  */
 export async function generateAndStoreEmbedding(item: Task | Tag): Promise<void> {
+	const startTime = performance.now();
+
 	if (!item.id) {
 		console.error('Cannot generate embedding for item without ID');
 		return;
@@ -535,7 +578,6 @@ export async function generateAndStoreEmbedding(item: Task | Tag): Promise<void>
 		const modelVersion = getModelVersion();
 
 		console.log(`📊 Generated embedding:`, {
-			dimensions: embedding.length,
 			modelVersion,
 			sample: embedding.slice(0, 5),
 			isArray: Array.isArray(embedding)
@@ -564,7 +606,10 @@ export async function generateAndStoreEmbedding(item: Task | Tag): Promise<void>
 			updatedAt: Timestamp.now()
 		});
 
-		console.log(`✅ Generated and stored embedding for "${item.name}"`);
+		
+		const endTime = performance.now();
+
+		console.log(`✅ Generated and stored embedding for "${item.name}"; took ${endTime - startTime} ms.`);
 		
 		// Verify it was saved by reading it back
 		const updatedDoc = await getDoc(docRef);
@@ -575,6 +620,8 @@ export async function generateAndStoreEmbedding(item: Task | Tag): Promise<void>
 			hasModelVersion: !!savedData?.embeddingModelVersion,
 			modelVersion: savedData?.embeddingModelVersion
 		});
+
+
 		
 	} catch (error) {
 		console.error(`❌ Error generating embedding for "${item.name}":`, error);
