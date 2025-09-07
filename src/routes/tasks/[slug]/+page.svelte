@@ -1,16 +1,15 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { onMount } from 'svelte';
-	import { getTagsForTask, updateTask } from '$lib/database';
-	import Save from '@lucide/svelte/icons/save';
+	import { onMount, onDestroy } from 'svelte';
+	import { addTagToTask, getRelations, getTagsForTask, updateTask } from '$lib/database';
 	import X from '@lucide/svelte/icons/x';
 	import ChevronUp from '@lucide/svelte/icons/chevron-up';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import AnimatedIcon from '$lib/icons/AnimatedIcon.svelte';
 	import NodeTable from '$lib/components/NodeTable.svelte';
-	import { Timestamp } from 'firebase/firestore';
-	import { data } from '$lib/globalState.svelte';
+	import { getDocsFromCache, Timestamp } from 'firebase/firestore';
+	import { data, graphNodeConverter } from '$lib/globalState.svelte';
 
 	// Get the task ID from the URL parameter
 	let taskId = $page.params.slug;
@@ -24,11 +23,18 @@
 	let editedTaskName = $state('');
 	let editedCompleted = $state(false);
 	let editedArchived = $state(false);
+	
+	// Autosave state
+	let saveTimeout: ReturnType<typeof setTimeout> | undefined;
+	let isSaving = $state(false);
+	let lastSaved = $state<Date | null>(null);
 
 	// Task relationships
 	let taskTags: Tag[] = $state([]);
 	let parentNodes: (Task | Tag)[] = $state([]);
 	let childNodes: (Task | Tag)[] = $state([]);
+
+	$inspect(childNodes);
 	
 	// Helper functions to get relationships  
 	async function getParentTasks(taskId: string): Promise<Task[]> {
@@ -73,15 +79,15 @@
 		return childQuery.docs.map(doc => doc.data());
 	}
 	
-	async function getChildTags(taskId: string): Promise<Tag[]> {
+	async function getChildren(taskId: string): Promise<GraphNode[]> {
 		const junctions = data.junctionsCollection;
 		const nodes = data.nodesCollection;
 		
 		if (!junctions || !nodes || !taskId) return [];
 		
-		// Find junctions where this task is the parent and child is a tag (rare case)
+		// Find junctions where this task is the parent
 		const { query, where, getDocs } = await import('firebase/firestore');
-		const junctionQuery = await getDocs(query(junctions, where('parentId', '==', taskId), where('childType', '==', 'tag')));
+		const junctionQuery = await getDocsFromCache(query(junctions, where('childId', '==', taskId)));
 		
 		const childIds = junctionQuery.docs.map(doc => doc.data().childId);
 		
@@ -89,7 +95,7 @@
 		
 		// Import tag converter from database module
 		const { tagConverter } = await import('$lib/globalState.svelte');
-		const childQuery = await getDocs(query(nodes, where('__name__', 'in', childIds)).withConverter(tagConverter));
+		const childQuery = await getDocsFromCache(query(nodes, where('__name__', 'in', childIds)).withConverter(graphNodeConverter));
 		
 		return childQuery.docs.map(doc => doc.data());
 	}
@@ -103,23 +109,19 @@
 		}
 	});
 
+	// TODO streamline this
 	onMount(async () => {
 		try {
-			// Load all relationships in parallel
-			const [tags, parentTasksData, childTasksData, childTagsData] = await Promise.all([
-				getTagsForTask(taskId),
-				getParentTasks(taskId),
-				getChildTasks(taskId),
-				getChildTags(taskId)
-			]);
+
+			parentNodes = await getRelations(taskId, 'parent');
+			childNodes = await getRelations(taskId, 'child');
 			
-			taskTags = tags;
-			
-			// Combine parent nodes (tags are parents, parent tasks are parents)
-			parentNodes = [...tags, ...parentTasksData];
+			console.log("RELATIONS FOUND: " + parentNodes);
+
+			taskTags = await getTagsForTask(taskId);
 			
 			// Combine child nodes (child tasks and child tags)
-			childNodes = [...childTasksData, ...childTagsData];
+			// childNodes = [...childTasksData, ...childTagsData];
 		} catch (error) {
 			console.error('Error loading task relationships:', error);
 			taskTags = [];
@@ -128,30 +130,74 @@
 		}
 	});
 
-	function handleSave() {
+	// Cleanup timeout on component destroy
+	onDestroy(() => {
+		if (saveTimeout) {
+			clearTimeout(saveTimeout);
+		}
+	});
+
+	// Autosave function with debouncing
+	async function autoSave() {
 		if (!task) return;
 
-		console.log('Saving task changes:', {
+		console.log('Autosaving task changes:', {
 			name: editedTaskName,
 			completed: editedCompleted,
 			archived: editedArchived
 		});
 
-		updateTask(task.id || '', {
-			name: editedTaskName,
-			completed: editedCompleted,
-			archived: editedArchived
-		});
+		isSaving = true;
+		try {
+			await updateTask(task.id || '', {
+				name: editedTaskName,
+				completed: editedCompleted,
+				archived: editedArchived
+			});
+			lastSaved = new Date();
+		} catch (error) {
+			console.error('Failed to autosave task:', error);
+		} finally {
+			isSaving = false;
+		}
+	}
 
+	// Debounced autosave effect for task name (text input)
+	$effect(() => {
+		if (!task || editedTaskName === task.name) return;
+		
+		// Clear existing timeout
+		if (saveTimeout) {
+			clearTimeout(saveTimeout);
+		}
+		
+		// Set new timeout for debounced save
+		saveTimeout = setTimeout(() => {
+			autoSave();
+		}, 1000); // 1 second debounce for text input
+	});
+
+	// Immediate autosave effect for boolean fields (completed/archived)
+	$effect(() => {
+		if (!task) return;
+		
+		// Only save if the values have actually changed from the original task
+		const hasChanges = editedCompleted !== task.completed || editedArchived !== task.archived;
+		
+		if (hasChanges) {
+			autoSave();
+		}
+	});
+
+	function handleBack() {
 		goto('/tasks');
 	}
 
-	function handleCancel() {
-		goto('/tasks');
-	}
-
-	function handleTagClick(tag: Tag) {
-		goto(`/tags/${tag.name}`);
+	function handleNodeClick(node: GraphNode) {
+		if(node.type === "tag")
+			goto(`/tags/${node.name}`);
+		else
+			goto(`/tasks/${node.name}`)
 	}
 	
 
@@ -195,35 +241,51 @@
 		<div class="mx-auto max-w-6xl">
 			<!-- Header -->
 			<div class="mb-6 flex items-center justify-between">
-				<h1 class="text-3xl font-bold">Task View</h1>
-				<div class="flex gap-2">
-					<button class="btn btn-outline" onclick={handleCancel}>
-						<X size={16} />
-						Back
-					</button>
-					<button class="btn btn-primary" onclick={handleSave}>
-						<Save size={16} />
-						Save Changes
-					</button>
+				<div class="flex items-center gap-4">
+					{#if isSaving}
+						<div class="flex items-center gap-2 text-sm text-base-content/70">
+							<div class="loading loading-spinner loading-xs"></div>
+							Saving...
+						</div>
+					{:else if lastSaved}
+						<div class="text-sm text-base-content/70">
+							Saved {lastSaved.toLocaleTimeString()}
+						</div>
+					{/if}
 				</div>
 			</div>
 
-			<!-- Parent Nodes Section -->
-			<NodeTable 
-				nodes={parentNodes}
-				title="Parent Nodes"
-				icon={ChevronUp}
-				variant="parent"
-			/>
-
-			<!-- Task Details Section -->
+			
 			<div class="task-details-panel bg-base-200 rounded-box mb-6 shadow-md">
-				<div class="p-6">
+				<div class="flex flex-col p-6 gap-3">
+
+					<!-- Parents Section -->
+						<div class="flex flex-wrap gap-3">
+							{#each parentNodes as parent (parent.id)}
+								<div class="removable-tag relative">
+									<button class="tag-chip clickable-tag" onclick={() => handleNodeClick(parent)}>
+										#{parent.name}
+									</button>
+									<button
+										class="remove-tag-button bg-error hover:bg-error/80 text-error-content absolute -top-2 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full text-xs font-bold transition-all duration-200"
+										onclick={() => removeTag(parent.id || '')}
+										title="Remove tag"
+									>
+										×
+									</button>
+								</div>
+							{/each}
+							<button class="tag-chip add-tag-chip" onclick={addTag} title="Add a new tag">
+								＋
+							</button>
+						</div>
+
+					<!-- Task Details Section -->
 					<div class="form-control">
-						<div class="flex items-center gap-3">
+						<div class="flex justify-center gap-3">
 							<input
 								type="text"
-								class="input input-bordered flex-1 text-lg font-medium"
+								class="input input-ghost text-lg font-medium"
 								bind:value={editedTaskName}
 								placeholder="Enter task name"
 							/>
@@ -247,20 +309,18 @@
 							</div>
 						</div>
 					</div>
-				</div>
 
-				<!-- Tags Section -->
-				<div class="px-6 pb-6">
-					<div class="tags-container bg-base-300 min-h-16 rounded-lg p-4">
+					<!-- Child Section -->
+
 						<div class="flex flex-wrap gap-3">
-							{#each taskTags as tag (tag.id)}
+							{#each childNodes as child (child.id)}
 								<div class="removable-tag relative">
-									<button class="tag-chip clickable-tag" onclick={() => handleTagClick(tag)}>
-										#{tag.name}
+									<button class="tag-chip clickable-tag" onclick={() => handleNodeClick(child)}>
+										#{child.name}
 									</button>
 									<button
 										class="remove-tag-button bg-error hover:bg-error/80 text-error-content absolute -top-2 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full text-xs font-bold transition-all duration-200"
-										onclick={() => removeTag(tag.id || '')}
+										onclick={() => removeTag(child.id || '')}
 										title="Remove tag"
 									>
 										×
@@ -271,7 +331,7 @@
 								add tag ＋
 							</button>
 						</div>
-					</div>
+
 				</div>
 
 				<!-- Metadata Section -->
@@ -307,13 +367,6 @@
 				</div>
 			</div>
 
-			<!-- Child Nodes Section -->
-			<NodeTable 
-				nodes={childNodes}
-				title="Child Nodes"
-				icon={ChevronDown}
-				variant="child"
-			/>
 		</div>
 	</section>
 {/if}

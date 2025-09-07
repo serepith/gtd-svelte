@@ -7,7 +7,7 @@
 	import NodeTable from '$lib/components/NodeTable.svelte';
 	import ListTodo from '@lucide/svelte/icons/list-todo';
 
-	// Custom transition for "blipping out" effect
+	
 	// function blipIn(node, { duration = 200 }) {
 	// 	return {
 	// 		duration,

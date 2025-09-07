@@ -128,6 +128,60 @@ export async function addTask(
 	}
 }
 
+export async function addTagToTask(tag: string, taskRef: DocumentReference) {
+	const nodes = data.nodesCollection;
+	const junctions = data.junctionsCollection;
+
+	if (nodes && junctions) {
+		const q = query(nodes, where('name', '==', tag));
+		const querySnapshot = await getDocs(q);
+		let tagRef = null as DocumentReference<Tag> | null;
+
+		// there should NOT be more than one tag with the same name
+		// but there might be no tag at all
+		if (querySnapshot.empty) {
+			// If no tag exists, create a new tag
+			tagRef = (await addDoc(nodes, {
+				name: tag,
+				createdAt: Timestamp.now(),
+				updatedAt: Timestamp.now(),
+				type: 'tag'
+			})) as DocumentReference<Tag>;
+			console.log('Created new tag:', tag, tagRef.id);
+
+			// Generate embedding for the new tag in the background
+			generateAndStoreEmbedding({
+				id: tagRef.id,
+				name: tag,
+				type: 'tag',
+				createdAt: Timestamp.now(),
+				updatedAt: Timestamp.now()
+			}).catch((error) => {
+				console.warn('Failed to generate embedding for new tag:', error);
+			});
+		} else {
+			// If a tag already exists, use the first one found
+			const doc = querySnapshot.docs[0];
+			tagRef = doc.ref as DocumentReference<Tag>;
+			console.log('Using existing tag:', tag, tagRef.id);
+		}
+
+		// Create a junction between task and tag
+		const junctionRef = await addDoc(junctions, {
+			parentId: tagRef.id,
+			childId: taskRef.id,
+			createdAt: Timestamp.now(),
+			parentType: 'tag',
+			childType: 'task'
+		});
+
+		console.log('Created junction:', tag, taskRef, junctionRef.id);
+	} else {
+		console.error('Missing nodes or junctions collection');
+	}
+
+}
+
 export async function updateTask(id: string, update: Partial<Task>) {
 	console.log('Updating task:', id, update);
 
@@ -152,7 +206,7 @@ export async function completeTask(id: string) {
 
 // Everything below this point is *local only* and does not call Firestore
 
-async function getRelations(
+export async function getRelations(
 	nodeId: string,
 	searchFor: 'parent' | 'child',
 	targetType?: 'task' | 'tag'

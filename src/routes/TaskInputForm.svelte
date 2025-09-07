@@ -90,6 +90,25 @@
 		updateSuggestions();
 	});
 
+	// Close suggestions when focus is lost
+	function handleBlur(event: FocusEvent) {
+		// Use setTimeout to allow time for suggestion clicks to register
+		// before closing the dropdown
+		setTimeout(() => {
+			const relatedTarget = event.relatedTarget as HTMLElement;
+			// Don't close if focus moved to a suggestion button or the dropdown itself
+			const dropdown = document.querySelector('.suggestions-dropdown');
+			if (relatedTarget && dropdown?.contains(relatedTarget)) {
+				return;
+			}
+			
+			showSuggestions = false;
+			semanticResults = [];
+			selectedSuggestionIndex = -1;
+			isSearching = false;
+		}, 150);
+	}
+
 	// Handle clicking on a duplicate suggestion
 	async function handleDuplicateAction(result: SearchResult) {
 		const task = result.item as Task;
@@ -801,6 +820,7 @@
 			onkeydown={() => {
 				updateCurrentNode();
 			}}
+			onblur={handleBlur}
 			class="textarea taskinput-textarea inset-0 flex flex-wrap"
 			style="min-height: 4.25rem; padding: 1rem 0.75rem; word-wrap: break-word; 
   		align-content: center;
@@ -817,6 +837,7 @@
 					transition:scale={{ duration: 50 }}
 					oninput={handleInput}
 					onkeydown={handleKeydown}
+					onblur={handleBlur}
 				></div>
 
 				<!-- oninput={handleInput} -->
@@ -826,7 +847,7 @@
 		<!-- Duplicate detection dropdown -->
 		{#if showSuggestions}
 			<div
-				class="bg-base-100 border-base-300 absolute top-full right-0 left-0 z-50 mt-1 max-h-60 overflow-y-auto rounded-lg border shadow-lg"
+				class="suggestions-dropdown bg-base-100 border-base-300 absolute top-full right-0 left-0 z-50 mt-1 max-h-60 overflow-y-auto rounded-lg border shadow-lg"
 				transition:fade={{ duration: 150 }}
 			>
 				{#if isSearching}
