@@ -519,7 +519,7 @@
 
 		// Otherwise, if we're in a tag, handle escape characters
 		else if (isInTag()) {
-			if (e.data === 'Enter' || e.data === 'Tab' || e.data === 'Escape') {
+			if (e.data === 'Tab' || e.data === 'Escape') {
 				// If we're in a tag and hit an escape character, end the current tag
 				//insertCharacterAtCursor(SEPARATOR_SPACE);
 				event.preventDefault();

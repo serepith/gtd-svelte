@@ -3,7 +3,7 @@
 @plugin '@tailwindcss/forms';
 @plugin "daisyui" {
 	themes:
-		coffee --default,
+		forest --default,
 		dark --prefersdark;
 }
 

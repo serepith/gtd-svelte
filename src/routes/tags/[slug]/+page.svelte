@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { getTagId, getTasksInTagWithEquivalents } from '$lib/database';
-	import { Check, Archive, Edit } from '@lucide/svelte';
+	import NodeTable from '$lib/components/NodeTable.svelte';
 
 	// Type for tasks with source information
 	type TaskWithSource = Task & {
@@ -116,21 +116,6 @@
 	function handleEditTag() {
 		goto(`/tags/${tagName}/edit`);
 	}
-
-	export function handleComplete(task: any) {
-		console.log('Complete task:', task.name);
-		// TODO: implement complete logic
-	}
-
-	export function handleArchive(task: any) {
-		console.log('Archive task:', task.name);
-		// TODO: implement archive logic
-	}
-
-	export function handleEdit(task: any) {
-		console.log('Edit task:', task.name);
-		// TODO: implement edit logic
-	}
 </script>
 
 <svelte:head>
@@ -172,71 +157,11 @@
 					</div>
 				{:else}
 					<div class="p-4">
-						<!-- Task table header -->
-						<div
-							class="task-header border-base-300 mb-2 grid grid-cols-[1fr_auto_auto_auto] items-center gap-4 border-b px-2 py-2 font-semibold"
-						>
-							<div>Task</div>
-							<div class="text-right">Source Tag</div>
-							<div class="text-right">Date</div>
-							<div class="text-right">Actions</div>
-						</div>
-
-						<!-- Task rows -->
-						{#each taggedTasks as task (task.id)}
-							<div
-								class="task-row hover-parent grid grid-cols-[1fr_auto_auto_auto] items-start gap-4 px-2 py-3"
-								class:completed={task.completed}
-							>
-								<div class="task-content">
-									<div class="task-text" class:line-through={task.completed}>{task.name}</div>
-								</div>
-								<div class="task-source self-center text-sm">
-									{#if task.isEquivalent}
-										<div class="tag-chip equivalent-tag" title="Via equivalent tag">
-											#{task.sourceTagName}
-										</div>
-									{:else}
-										<div class="tag-chip current-tag" title="Direct tag">#{task.sourceTagName}</div>
-									{/if}
-								</div>
-								<div class="task-date text-base-content/70 self-center text-sm">
-									{task.createdAt.toDate().toLocaleDateString('en-US', {
-										weekday: 'short',
-										month: 'short',
-										day: 'numeric'
-									})}
-								</div>
-								<div class="task-actions self-center">
-									{#if !task.completed}
-										<button
-											class="action-btn complete-btn"
-											onclick={() => handleComplete(task)}
-											aria-label="Complete {task.name}"
-											title="Complete task"
-										>
-											<Check />
-										</button>
-									{/if}
-									<button
-										class="action-btn archive-btn"
-										onclick={() => handleArchive(task)}
-										aria-label="Archive {task.name}"
-										title="Archive task"
-									>
-										<Archive />
-									</button>
-									<button
-										class="action-btn edit-btn"
-										onclick={() => handleEdit(task)}
-										aria-label="Edit {task.name}"
-										title="Edit task"
-									>
-										<Edit />
-									</button>
-								</div>
-							</div>
-						{/each}
+						<NodeTable 
+							nodes={taggedTasks}
+							title="Tasks"
+							showSourceTag={true}
+						/>
 					</div>
 				{/if}
 			{:catch error}
@@ -257,24 +182,6 @@
 		font-size: 0.75rem;
 		font-weight: 500;
 		transition: all 0.2s ease;
-	}
-
-	.current-tag {
-		background-color: var(--color-primary);
-		color: var(--color-primary-content);
-		opacity: 0.9;
-	}
-
-	.equivalent-tag {
-		background-color: var(--color-accent);
-		color: var(--color-accent-content);
-		opacity: 0.8;
-		border: 1px solid var(--color-accent);
-	}
-
-	.equivalent-tag:hover {
-		opacity: 1;
-		transform: scale(1.05);
 	}
 
 	.page-tag-chip {
@@ -306,81 +213,4 @@
 		transform: translateY(0) scaleY(1);
 	}
 
-	/* Task table styles */
-	.task-header {
-		color: var(--color-base-content);
-		opacity: 0.8;
-	}
-
-	.task-row {
-		border-bottom: 0.5px solid rgb(from var(--color-primary) r g b / 0.2);
-		transition: all 0.2s ease;
-	}
-
-	.task-row:last-child {
-		border-bottom: none;
-	}
-
-	.task-row:hover {
-		background-color: rgb(from var(--color-base-content) r g b / 0.02);
-	}
-
-	.task-row.completed {
-		opacity: 0.6;
-	}
-
-	.task-actions {
-		display: flex;
-		gap: 0.25rem;
-		opacity: 0.15;
-		transition: opacity 0.3s ease;
-		justify-content: flex-end;
-	}
-
-	.hover-parent:hover .task-actions {
-		opacity: 0.6;
-	}
-
-	.task-actions:hover {
-		opacity: 1;
-	}
-
-	.action-btn {
-		padding: 0.25rem;
-		border: none;
-		background: transparent;
-		cursor: pointer;
-		border-radius: 0.25rem;
-		transition: all 0.2s ease;
-		width: 1.5rem;
-		height: 1.5rem;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-	}
-
-	.action-btn:hover {
-		background-color: var(--color-base-300);
-		transform: scale(1.1);
-	}
-
-	.complete-btn:hover {
-		background-color: rgb(from var(--color-success) r g b / 0.2);
-		color: var(--color-success);
-	}
-
-	.archive-btn:hover {
-		background-color: rgb(from var(--color-warning) r g b / 0.2);
-		color: var(--color-warning);
-	}
-
-	.edit-btn:hover {
-		background-color: rgb(from var(--color-info) r g b / 0.2);
-		color: var(--color-info);
-	}
-
-	.action-btn :global(svg) {
-		width: 1rem;
-		height: 1rem;
-	}
 </style>

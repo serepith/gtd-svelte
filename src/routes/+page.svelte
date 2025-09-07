@@ -1,11 +1,5 @@
 <script lang="ts">
-	//import { firebase } from '$lib/globalState.svelte';
 	import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-	import TaskInputForm from './TaskInputForm.svelte';
-	// $effect(() => {
-	// 	$inspect(firebase, 'firebase');
-	// });
-
 	import type { Snapshot } from './$types';
 	import { data } from '$lib/globalState.svelte';
 
@@ -41,8 +35,6 @@
 	>
 		{#if !data.user}
 			<button class="btn btn-soft btn-lg min-w-sm" onclick={(e) => handleLogin(e)}>Login</button>
-			<!-- {:else}
-			<TaskInputForm bind:taskText></TaskInputForm> -->
 		{/if}
 	</div>
 </section>
