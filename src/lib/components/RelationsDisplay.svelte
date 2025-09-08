@@ -8,10 +8,10 @@
 
   interface RelationsDisplayProps {
     nodes: GraphNode[],
-    task: Task
+    taskId: string
   }
 
-  let { nodes, task }: RelationsDisplayProps = $props();
+  let { nodes, taskId }: RelationsDisplayProps = $props();
   
 	// Tag input state
 	let showTagInput = $state(false);
@@ -94,7 +94,7 @@
 	async function saveTag(tagName?: string) {
 		const finalTagName = tagName || tagInputValue.trim();
 		
-		if (!finalTagName || !task) return;
+		if (!finalTagName) return;
 
 		try {
 			// Check if tag is already associated
@@ -109,10 +109,10 @@
 			}
 
 			// Add the tag to the task
-			await addTagToTask(finalTagName, { id: task.id } as any);
+			await addTagToTask(finalTagName, taskId);
 			
 			// Reload parent nodes to show the new tag
-			nodes = await getRelations(task.id || '', 'parent');
+			nodes = await getRelations(taskId || '', 'parent');
 			
 			cancelTagInput();
 		} catch (error) {

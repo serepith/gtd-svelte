@@ -14,7 +14,9 @@ vi.mock('@xenova/transformers', () => ({
 	pipeline: vi.fn(() =>
 		Promise.resolve(
 			vi.fn().mockResolvedValue({
-				data: new Array(384).fill(0.1) // 384-dimensional embedding with 0.1 values
+				to: vi.fn().mockReturnValue({
+					data: new Float32Array(384).fill(0.1) // 384-dimensional embedding with 0.1 values
+				})
 			})
 		)
 	),
@@ -34,8 +36,10 @@ describe('Embeddings', () => {
 			const embedding = await generateEmbedding('test task');
 
 			expect(embedding).toBeDefined();
-			expect(Array.isArray(embedding)).toBe(true);
-			expect(embedding.length).toBe(384); // all-MiniLM-L6-v2 dimensions
+			expect(embedding.to).toBeDefined();
+			const float32Data = embedding.to('float32').data;
+			expect(float32Data instanceof Float32Array).toBe(true);
+			expect(float32Data.length).toBe(384); // all-MiniLM-L6-v2 dimensions
 		});
 
 		it('should throw error for empty text', async () => {
@@ -50,32 +54,32 @@ describe('Embeddings', () => {
 
 	describe('cosineSimilarity', () => {
 		it('should calculate perfect similarity for identical embeddings', () => {
-			const embedding1 = [1, 0, 0];
-			const embedding2 = [1, 0, 0];
+			const embedding1 = new Float32Array([1, 0, 0]);
+			const embedding2 = new Float32Array([1, 0, 0]);
 
 			const similarity = cosineSimilarity(embedding1, embedding2);
 			expect(similarity).toBeCloseTo(1.0, 5);
 		});
 
 		it('should calculate zero similarity for orthogonal embeddings', () => {
-			const embedding1 = [1, 0];
-			const embedding2 = [0, 1];
+			const embedding1 = new Float32Array([1, 0]);
+			const embedding2 = new Float32Array([0, 1]);
 
 			const similarity = cosineSimilarity(embedding1, embedding2);
 			expect(similarity).toBeCloseTo(0.0, 5);
 		});
 
 		it('should calculate intermediate similarity', () => {
-			const embedding1 = [1, 1];
-			const embedding2 = [1, 0];
+			const embedding1 = new Float32Array([1, 1]);
+			const embedding2 = new Float32Array([1, 0]);
 
 			const similarity = cosineSimilarity(embedding1, embedding2);
 			expect(similarity).toBeCloseTo(0.7071, 4); // 1/√2
 		});
 
 		it('should throw error for different length embeddings', () => {
-			const embedding1 = [1, 0];
-			const embedding2 = [1, 0, 0];
+			const embedding1 = new Float32Array([1, 0]);
+			const embedding2 = new Float32Array([1, 0, 0]);
 
 			expect(() => cosineSimilarity(embedding1, embedding2)).toThrow(
 				'Embeddings must have the same length'
@@ -83,8 +87,8 @@ describe('Embeddings', () => {
 		});
 
 		it('should handle zero vectors', () => {
-			const embedding1 = [0, 0, 0];
-			const embedding2 = [1, 1, 1];
+			const embedding1 = new Float32Array([0, 0, 0]);
+			const embedding2 = new Float32Array([1, 1, 1]);
 
 			const similarity = cosineSimilarity(embedding1, embedding2);
 			expect(similarity).toBe(0);
@@ -117,7 +121,7 @@ describe('Embeddings', () => {
 				updatedAt: Timestamp.now(),
 				completed: false,
 				archived: false,
-				embedding: [1, 2, 3],
+				embedding: new Float32Array([1, 2, 3]),
 				embeddingModelVersion: 'old-version'
 			};
 
@@ -133,7 +137,7 @@ describe('Embeddings', () => {
 				updatedAt: Timestamp.now(),
 				completed: false,
 				archived: false,
-				embedding: [1, 2, 3],
+				embedding: new Float32Array([1, 2, 3]),
 				embeddingModelVersion: currentModelVersion
 			};
 
@@ -168,7 +172,7 @@ describe('Embeddings', () => {
 				updatedAt: Timestamp.now(),
 				completed: false,
 				archived: false,
-				embedding: [0.8, 0.6, 0.0], // High similarity to query
+				embedding: new Float32Array([0.8, 0.6, 0.0]), // High similarity to query
 				embeddingModelVersion: getModelVersion()
 			},
 			{
@@ -179,7 +183,7 @@ describe('Embeddings', () => {
 				updatedAt: Timestamp.now(),
 				completed: false,
 				archived: false,
-				embedding: [0.2, 0.1, 0.0], // Lower similarity
+				embedding: new Float32Array([0.2, 0.1, 0.0]), // Lower similarity
 				embeddingModelVersion: getModelVersion()
 			},
 			{
@@ -188,7 +192,7 @@ describe('Embeddings', () => {
 				type: 'tag',
 				createdAt: Timestamp.now(),
 				updatedAt: Timestamp.now(),
-				embedding: [0.9, 0.4, 0.0], // High similarity
+				embedding: new Float32Array([0.9, 0.4, 0.0]), // High similarity
 				embeddingModelVersion: getModelVersion()
 			}
 		];

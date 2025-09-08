@@ -1,5 +1,4 @@
 import { pipeline, env, FeatureExtractionPipeline, type DataArray } from '@xenova/transformers';
-import { parentPort, workerData } from "node:worker_threads";
 
 // Configuration
 const MODEL_NAME = 'Xenova/all-MiniLM-L6-v2';
@@ -15,6 +14,24 @@ let embeddingPipeline: FeatureExtractionPipeline | null = null;
 
 interface EmbedJob { text: string }
 interface EmbedResult { vector: ArrayBuffer }
+
+const embedWorker = new Worker(new URL('$lib/workers/embed.worker.ts', import.meta.url), { type: 'module' });
+
+export function runEmbedding(text: string): Promise<Float32Array> {
+	return new Promise((resolve, reject) => {
+		const onMessage = (ev: MessageEvent<{ vector: ArrayBuffer }>) => {
+			embedWorker.removeEventListener('message', onMessage);
+			resolve(new Float32Array(ev.data.vector)); // zero-copy view
+		};
+		const onError = (err: unknown) => {
+			embedWorker.removeEventListener('message', onMessage);
+			reject(err);
+		};
+		embedWorker.addEventListener('message', onMessage, { once: true });
+		embedWorker.addEventListener('error', onError, { once: true });
+		embedWorker.postMessage({ text });
+	});
+}
 
 /**
  * Initialize and cache the embedding pipeline
@@ -174,20 +191,4 @@ export async function findSimilarItems(
 		console.error('Error in semantic search:', error);
 		return [];
 	}
-}
-
-
-if(parentPort) {
-	parentPort.on("message", async (payload) => {
-		const out = await generateEmbedding(payload.text);
-		const f32 = out.to('float32');                 // built-in dtype conversion
-		const vec: Float32Array = f32.data as Float32Array;  // now safely a Float32Array
-
-		// Narrow ArrayBufferLike to ArrayBuffer for the transfer list
-		const buf = vec.buffer as ArrayBuffer;
-
-		const result: EmbedResult = { vector: buf };
-		if(parentPort)
-			parentPort.postMessage(result, [buf]); // transfer, not copy
-	});
 }

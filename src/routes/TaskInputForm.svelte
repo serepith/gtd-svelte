@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { addTask, getAllTasks, getSimilar, updateTask } from '$lib/database';
+	import { addTask, getAllTasks, updateTask } from '$lib/database';
 	import { data } from '$lib/globalState.svelte';
 	import { createDebouncedSearch } from '$lib/semanticSearch';
 	import type { SearchResult } from '$lib/embeddings';

@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Timestamp } from 'firebase/firestore';
 import {
 	filterTagsByName,
-	getSimilar,
 	addTask,
 	updateTask,
 	completeTask,

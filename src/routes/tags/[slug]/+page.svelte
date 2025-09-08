@@ -167,6 +167,13 @@
 			{:catch error}
 				<div class="p-8 text-center">
 					<p class="text-error">Error loading tasks: {error}</p>
+					{#await getTagId(tagName)}
+						Getting tag id...
+					{:then tag}
+						Tag id: {tag?.id}, {tag?.name}
+					{:catch error}
+						Even your error has an error: {error}
+					{/await}
 				</div>
 			{/await}
 		</div>

@@ -23,7 +23,7 @@ import {
 
 import { similarity } from '@nlpjs/similarity';
 import { diceCoefficient } from 'dice-coefficient';
-import { generateEmbedding, needsEmbedding, getModelVersion } from './embeddings';
+import { generateEmbedding, needsEmbedding, getModelVersion, runEmbedding } from './embeddings';
 import { fi } from 'zod/v4/locales';
 
 async function makeNode(nodeText: string, nodeType: 'task' | 'tag', nodes: CollectionReference<DocumentData, DocumentData>) {
@@ -55,7 +55,7 @@ async function makeNode(nodeText: string, nodeType: 'task' | 'tag', nodes: Colle
 		console.log(`Node creation took ${endTime - startTime} ms.`);
 
 		// Generate embedding for the new task in the background
-		generateAndStoreEmbedding(nodeData).catch((error) => {
+		generateAndStoreEmbedding({ id: nodeRef.id, ...nodeData }).catch((error) => {
 			console.warn(`Failed to generate embedding for new ${nodeType}:`, error);
 		});
 
@@ -68,68 +68,58 @@ async function makeNode(nodeText: string, nodeType: 'task' | 'tag', nodes: Colle
 	return null;
 }
 
-// internal function--create task and add to database
-async function makeTask(nodeText: string, nodes: CollectionReference<DocumentData, DocumentData>) {
-	const startTime = performance.now();
-	
-	if(nodeText.trim()) {
-		let nodeData = { 
-			name: nodeText,
-			createdAt: Timestamp.now(),
-			updatedAt: Timestamp.now(),
-			type: 'task', 
-			completed: false, 
-			archived: false } as Task;
+// async function getNodeById(docId: string, nodes: CollectionReference) {
+// 	const docRef = doc(nodes, docId);
+// 	const document = await getDoc(docRef);
+// 	if(document.exists()) return document;
+// 	return null;
+// }
 
-		const nodeRef = await addDoc(nodes, nodeData);
-
-		console.log(`Task added to collection:`, nodeData, nodeRef.id);
-
-		const endTime = performance.now();
-
-		console.log(`Node creation took ${endTime - startTime} ms.`);
-
-		// Generate embedding for the new task in the background
-		generateAndStoreEmbedding(nodeData).catch((error) => {
-			console.warn(`Failed to generate embedding for new task:`, error);
-		});
-
-		return nodeRef as DocumentReference<Task>;
-	}
-
-	console.log("Node text empty!");
+async function getNodeByName(docName: string, nodes: CollectionReference) {
+	const q = query(nodes, where('name', '==', docName));
+	const querySnapshot = await getDocs(q);
+	return querySnapshot;
 	return null;
 }
 
-// internal function--create tag and add to database
-async function makeTag(nodeText: string, nodes: CollectionReference<DocumentData, DocumentData>) {
-	const startTime = performance.now();
-	
-	if(nodeText.trim()) {
-		let nodeData = { 
-			name: nodeText,
-			createdAt: Timestamp.now(),
-			updatedAt: Timestamp.now(),
-			type: 'tag' } as Tag;
+async function makeJunction(parent: string | DocumentReference, child: string | DocumentReference, 
+	parentType: 'tag' | 'task', childType: 'tag' | 'task', checkExistence = false, nodes: CollectionReference, junctions: CollectionReference
+) {
+	console.log("Child is: " + child.toString());
+		const [parentRef, childRef] = [parent instanceof DocumentReference ? parent : doc(nodes, parent), 
+																	child instanceof DocumentReference ? child : doc(nodes, child)];
 
-		const nodeRef = await addDoc(nodes, nodeData);
+		if(checkExistence) {
+			const [parentDoc, childDoc] = [await(getDoc(parentRef)), await(getDoc(childRef))];
 
-		console.log(`Tag added to collection:`, nodeData, nodeRef.id);
+			if(parentDoc.exists() && childDoc.exists()) {
+				const junctionRef = await addDoc(junctions, {
+					parentId: parentRef.id,
+					childId: childRef.id,
+					createdAt: Timestamp.now(),
+					parentType: parentType,
+					childType: childType
+				});
+					
+				console.log('✅ Created junction:', parentRef.id, childRef.id, junctionRef.id);
 
-		const endTime = performance.now();
+				return junctionRef;
+			} else {
+				console.error(`❌ Parent: ${parentDoc.exists() ? parentDoc.data.name : "does not exist"}    Child: ${childDoc.exists() ? childDoc.data.name : "does not exist"}!`)
+			}
+		} else {
+			const junctionRef = await addDoc(junctions, {
+					parentId: parentRef.id,
+					childId: childRef.id,
+					createdAt: Timestamp.now(),
+					parentType: parentType,
+					childType: childType
+				});
+					
+				console.log('✅ Created junction:', parentRef.id, childRef.id, junctionRef.id);
 
-		console.log(`Node creation took ${endTime - startTime} ms.`);
-
-		// Generate embedding for the new task in the background
-		generateAndStoreEmbedding(nodeData).catch((error) => {
-			console.warn(`Failed to generate embedding for new task:`, error);
-		});
-
-		return nodeRef as DocumentReference<Tag>;
-	}
-
-	console.log("Node text empty!");
-	return null;
+				return junctionRef;
+		}
 }
 
 export async function addTask(
@@ -155,11 +145,11 @@ export async function addTask(
 	const junctions = data.junctionsCollection;
 
 	if (nodes && junctions && task) {
-		const taskRef = await makeTask(task, nodes);
+		const taskRef = await makeNode(task, 'task', nodes);
 
 		if(taskRef) {
 			for (const tag of tags) {
-				addTagToTask(tag, taskRef.id);
+				addTagToTask(tag, taskRef.id, false);
 			}
 		} else {
 			console.error('❌ Failed to create task!');
@@ -169,43 +159,37 @@ export async function addTask(
 	}
 }
 
-export async function addTagToTask(tagName: string, taskId: string) {
+export async function addTagToTask(tagName: string, taskId: string, checkTaskExistence = false) {
 	const nodes = data.nodesCollection;
 	const junctions = data.junctionsCollection;
 
 	if (nodes && junctions) {
-		const q = query(nodes, where('name', '==', tagName));
-			const querySnapshot = await getDocs(q);
+			const querySnapshot = await getNodeByName(tagName, nodes);
 			let tagRef = null as DocumentReference<Tag> | null;
 
 			// there should NOT be more than one tag with the same name
 			// but there might be no tag at all
-			if (querySnapshot.empty) {
-				// If no tag exists, create a new tag
-				tagRef = await makeTag(tagName, nodes);
-				if(tagRef)
-					console.log('✅ Created new tag:', tagName, tagRef.id);
-				else console.log("❌ Failed to create new tag " + tagName + "!");
-			} else {
-				// If a tag already exists, use the first one found (which should be the only one)
-				if(querySnapshot.docs.length > 1)
-					console.log(`‼️ More than one identical tag "${tagName}" found!`);
-				const doc = querySnapshot.docs[0];
-				tagRef = doc.ref as DocumentReference<Tag>;
-				console.log('🏷️ Using existing tag:', tagName, tagRef.id);
+			if(querySnapshot) {
+				if (querySnapshot.empty) {
+					tagRef = await makeNode(tagName, 'tag', nodes) as DocumentReference<Tag>;
+					if(tagRef)
+						console.log('✅ Created new tag:', tagName, tagRef.id);
+					else console.log("❌ Failed to create new tag " + tagName + "!");
+				} else {
+					if(querySnapshot.docs.length > 1)
+						console.log(`‼️ More than one identical tag "${tagName}" found!`);
+					const doc = querySnapshot.docs[0];
+					tagRef = doc.ref as DocumentReference<Tag>;
+					console.log('🏷️ Using existing tag:', tagName, tagRef.id);
+				}
 			}
 
-			if(tagRef && taskId) {
-				// Create a junction between task and tag
-				const junctionRef = await addDoc(junctions, {
-					parentId: tagRef.id,
-					childId: taskId,
-					createdAt: Timestamp.now(),
-					parentType: 'tag',
-					childType: 'task'
-				});
-				
-				console.log('✅ Created junction:', tagName, taskId, junctionRef.id);
+			if(tagRef) {
+				// We know the tag exists, given that we just made it; if we're assured of task existence, don't check again
+				const junctionRef = await makeJunction(tagRef, taskId, 'tag', 'task', checkTaskExistence, nodes, junctions);
+
+				if(junctionRef) console.log('✅ Created junction:', tagName, taskId, junctionRef.id);
+				else console.log('❌ Error creatng junction!');
 			}
 	} else {
 		console.error('❌ Missing nodes or junctions collection!');
@@ -303,22 +287,22 @@ export async function getRelations(
 	}
 }
 
-export async function getSimilar(searchText: string, count?: number) {
-	const nodes = await getAllTasks();
+// export async function getSimilar(searchText: string, count?: number) {
+// 	const nodes = await getAllTasks();
 
-	const similarities = [];
+// 	const similarities = [];
 
-	for (const n of nodes) {
-		similarities.push({ node: n, similarity: diceCoefficient(searchText, n.name) });
-	}
+// 	for (const n of nodes) {
+// 		similarities.push({ node: n, similarity: diceCoefficient(searchText, n.name) });
+// 	}
 
-	similarities.sort((a, b) => a.similarity - b.similarity);
+// 	similarities.sort((a, b) => a.similarity - b.similarity);
 
-	console.log(similarities.slice(0, 3));
+// 	console.log(similarities.slice(0, 3));
 
-	if (count) return similarities.slice(0, Math.min(similarities.length, count)).map((i) => i.node);
-	return similarities.slice(0, 3).map((i) => i.node);
-}
+// 	if (count) return similarities.slice(0, Math.min(similarities.length, count)).map((i) => i.node);
+// 	return similarities.slice(0, 3).map((i) => i.node);
+// }
 
 export async function getTasksInTag(tagId: string) {
 	return (await getRelations(tagId, 'child', 'task')).map((doc) => doc as Task);
@@ -332,6 +316,8 @@ export async function getTasksInTagWithEquivalents(
 		console.error('No nodes collection found');
 		return [];
 	}
+
+	console.log(`Tag id: ${tagId}`)
 
 	// Get the current tag info
 	const currentTagQuery = query(nodes, where('__name__', '==', tagId)).withConverter(tagConverter);
@@ -369,6 +355,8 @@ export async function getTasksInTagWithEquivalents(
 
 		if (!otherTag) continue;
 
+		console.log("made it so far...");
+
 		// Get tasks from the other tag
 		const otherTasks = await getTasksInTag(otherTagId);
 
@@ -395,25 +383,32 @@ export async function getTagsForTask(taskId: string): Promise<Tag[]> {
 }
 
 export async function getTagId(tagName: string) {
+	let startTime = performance.now();
 	let nodes = data.nodesCollection;
 	if (nodes)
 		return (
 			await getDocsFromCache(query(nodes, where('name', '==', tagName)).withConverter(tagConverter))
 		).docs[0].data() as Tag;
+	let endTime = performance.now();
+	console.log(`Get tag id took ${endTime - startTime} ms.`);
 	return null;
 }
 
 export async function getNodeId(nodeName: string) {
+	let startTime = performance.now();
 	let nodes = data.nodesCollection;
 	if (nodes)
 		return (
 			await getDocsFromCache(query(nodes, where('name', '==', nodeName)).withConverter(graphNodeConverter))
 		).docs[0].data();
+	let endTime = performance.now();
+	console.log(`Get node id took ${endTime - startTime} ms.`);
 	return null;
 
 }
 
 export async function getAllTags(): Promise<Tag[]> {
+	let startTime = performance.now();
 	const nodes = data.nodesCollection;
 	if (!nodes) {
 		console.error('No nodes collection found');
@@ -422,6 +417,8 @@ export async function getAllTags(): Promise<Tag[]> {
 
 	const q = query(nodes, where('type', '==', 'tag')).withConverter(tagConverter);
 	const querySnapshot = await getDocsFromCache(q);
+	let endTime = performance.now();
+	console.log(`Get all tags took ${endTime - startTime} ms.`);
 	return querySnapshot.docs.map((doc) => doc.data());
 }
 
@@ -574,7 +571,7 @@ export async function generateAndStoreEmbedding(item: Task | Tag): Promise<void>
 
 	try {
 		console.log(`🔄 Generating embedding for "${item.name}"...`);
-		const embedding = await generateEmbedding(item.name);
+		const embedding = await runEmbedding(item.name);
 		const modelVersion = getModelVersion();
 
 		console.log(`📊 Generated embedding:`, {
@@ -689,4 +686,26 @@ export async function getAllItemsWithEmbeddings(): Promise<(Task | Tag)[]> {
 	
 	console.log('✅ Items with embeddings:', itemsWithEmbeddings.length);
 	return itemsWithEmbeddings;
+}
+
+export async function getAllJunctions(): Promise<Junction[]> {
+	const junctions = data.junctionsCollection;
+	if (!junctions) {
+		console.error('No junctions collection found');
+		return [];
+	}
+
+	const querySnapshot = await getDocsFromCache(junctions);
+	return querySnapshot.docs.map((doc) => {
+		const data = doc.data();
+		return {
+			id: doc.id,
+			parentId: data.parentId,
+			childId: data.childId,
+			parentType: data.parentType,
+			childType: data.childType,
+			createdAt: data.createdAt,
+			junctionType: data.junctionType
+		} as Junction;
+	});
 }

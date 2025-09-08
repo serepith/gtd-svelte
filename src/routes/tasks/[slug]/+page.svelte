@@ -114,7 +114,7 @@
 		}, 1000); // 1 second debounce for text input
 	});
 
-	// Immediate autosave effect for boolean fields (completed/archived)
+	// autosave effect for boolean fields (completed/archived)
 	$effect(() => {
 		if (!task) return;
 		
@@ -152,9 +152,9 @@
 			</div>
 		</div>
 	</section>
-{:else}
-	<section class="p-4">
-		<div class="mx-auto max-w-6xl">
+{:else if task.id}
+	<section class="flex p-4 justify-center self-center-safe">
+		<div class="flex mx-auto max-w-6xl justify-center">
 			<!-- Header -->
 			<div class="mb-6 flex items-center justify-between">
 				<div class="flex items-center gap-4">
@@ -170,20 +170,19 @@
 					{/if}
 				</div>
 			</div>
-
 			
 			<div class="task-details-panel bg-base-200 rounded-box mb-6 shadow-md">
-				<div class="flex flex-col p-6 gap-3">
+				<div class="flex flex-col p-6 gap-3 justify-center">
 
 					<!-- Parents Section -->
-					<RelationsDisplay nodes={parentNodes} {task} />
+					<RelationsDisplay nodes={parentNodes} taskId={task.id} />
 
 					<!-- Task Details Section -->
 					<div class="form-control">
 						<div class="flex justify-center gap-3">
 							<input
 								type="text"
-								class="input input-ghost text-lg font-medium"
+								class="input text-lg font-medium"
 								bind:value={editedTaskName}
 								placeholder="Enter task name"
 							/>
@@ -210,7 +209,7 @@
 
 					<!-- Child Section -->
 
-					<RelationsDisplay nodes={childNodes} {task} />
+					<RelationsDisplay nodes={childNodes} taskId={task.id} />
 
 				</div>
 
@@ -247,6 +246,14 @@
 				</div>
 			</div>
 
+		</div>
+	</section>
+{:else}
+	<section class="p-4">
+		<div class="mx-auto max-w-6xl">
+			<div class="py-12 text-center">
+				<p class="text-base-content/70 mt-4">Error: no task id found!</p>
+			</div>
 		</div>
 	</section>
 {/if}

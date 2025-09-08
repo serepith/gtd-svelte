@@ -6,6 +6,9 @@
 	
 	// Import debug functions for embeddings (this makes them available in browser console)
 	import '$lib/initializeEmbeddings';
+	
+	// Import debug functions for junction validation (this makes them available in browser console)
+	import '$lib/initializeJunctionValidation';
 
 	let { children } = $props();
 
@@ -23,7 +26,7 @@
 			<TaskInputForm bind:isSidebar />
 		</div>
 
-		<main class="flex flex-1">
+		<main class="flex flex-1 justify-center">
 			{#if children}
 				{@render children()}
 			{/if}
