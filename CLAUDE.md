@@ -21,6 +21,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run check` - Run SvelteKit sync and type checking
 - `npm run check:watch` - Run type checking in watch mode
 
+### Testing
+
+- `npm run test` - Run tests in watch mode
+- `npm run test:run` - Run tests once
+- `npm run test:ui` - Open Vitest UI (requires `npm install -D @vitest/ui`)
+- `npm run test:coverage` - Run tests with coverage report (requires `npm install -D @vitest/coverage-v8`)
+
 ## Architecture
 
 ### Core Technology Stack
@@ -78,3 +85,4 @@ Environment variables required:
 - Uses Firebase persistent local cache with tab synchronization
 - Task input supports inline tags with `#` syntax
 - Static site generation configured for Firebase hosting
+- **Svelte 5 Reactivity**: Use `$derived.by()` for complex derived values that require function logic, not just `$derived()`

@@ -17,6 +17,8 @@ declare global {
 		updatedAt: Timestamp;
 		completed: boolean;
 		archived: boolean;
+		embedding?: Float32Array;
+		embeddingModelVersion?: string;
 	};
 	type Tag = {
 		id?: string;
@@ -24,6 +26,8 @@ declare global {
 		type: 'tag';
 		createdAt: Timestamp;
 		updatedAt: Timestamp;
+		embedding?: Float32Array;
+		embeddingModelVersion?: string;
 	};
 	type GraphNode = Task | Tag;
 	type Junction = {

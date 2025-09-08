@@ -1,11 +1,13 @@
 <script lang="ts">
-	import { addTask, getAllTasks, getSimilar } from '$lib/database';
+	import { addTask, getAllTasks, updateTask } from '$lib/database';
 	import { data } from '$lib/globalState.svelte';
+	import { createDebouncedSearch } from '$lib/semanticSearch';
+	import type { SearchResult } from '$lib/embeddings';
 	// import { firebase, getNodesCollection } from '$lib/globalState.svelte';
 	import { fade, scale } from 'svelte/transition';
+	import { CheckSquare, Hash, Archive, ExternalLink } from '@lucide/svelte';
+	import { goto } from '$app/navigation';
 
-
-	
 	let { isSidebar = $bindable(false) } = $props();
 
 	let taskInputElement: HTMLDivElement | null = null;
@@ -33,118 +35,151 @@
 		chunks.map((chunk) => (chunk.content.startsWith('#') ? 'tag' : 'text'))
 	);
 
-	// Auto-suggest state
-	//let suggestions = $state<Task[]>([]);
+	// Auto-suggest state for duplicate detection
+	let semanticResults = $state<SearchResult[]>([]);
 	let showSuggestions = $state(false);
 	let selectedSuggestionIndex = $state(-1);
-	let suggestionTimeout: ReturnType<typeof setTimeout> | null = null;
+	let isSearching = $state(false);
 
 	// Get the full text content from chunks for suggestions
 	const fullTextContent = $derived.by(() => {
-		return chunks
-			//.filter((chunk) => !chunk.content.startsWith('#'))
-			.map((chunk) => chunk.content)
-			.join('')
-			.trim();
+		return (
+			chunks
+				//.filter((chunk) => !chunk.content.startsWith('#'))
+				.map((chunk) => chunk.content)
+				.join('')
+				.trim()
+		);
 	});
 
-	let suggestions = $derived(getSimilar(fullTextContent));
+	// Create debounced semantic search function for duplicate detection
+	const debouncedSemanticSearch = createDebouncedSearch(300);
 
-	// Update suggestions when text changes
-	async function updateSuggestions() {
-		if (suggestionTimeout) {
-			clearTimeout(suggestionTimeout);
-		}
-
+	// Update suggestions when text changes using semantic search
+	function updateSuggestions() {
 		const text = fullTextContent;
-		if (text.length < 2) {
+		
+		// Only search if text is substantial enough
+		if (text.length < 3) {
 			showSuggestions = false;
+			semanticResults = [];
+			isSearching = false;
 			return;
 		}
 
-		// suggestionTimeout = setTimeout(async () => {
-		// 	try {
-		// 		const similarTasks = await getSimilar(text, 5);
-		// 		// Filter out exact matches and empty tasks
-		// 		suggestions = similarTasks.filter(
-		// 			(task) => task.name.toLowerCase() !== text.toLowerCase() && task.name.trim().length > 0
-		// 		);
-		// 		showSuggestions = suggestions.length > 0;
-		// 		selectedSuggestionIndex = -1;
-		// 	} catch (error) {
-		// 		console.error('Error fetching suggestions:', error);
-		// 		showSuggestions = false;
-		// 		suggestions = [];
-		// 	}
-		// }, 300); // Debounce for 300ms
+		// Start loading state
+		isSearching = true;
+		showSuggestions = true;
+
+		// Use semantic search to find similar tasks for duplicate detection
+		debouncedSemanticSearch(text, (results) => {
+			console.log('Duplicate detection results for:', text, results);
+			// Show only tasks (since we're adding a task) - keep high similarity matches as these are potential duplicates
+			semanticResults = results
+				.filter(result => result.type === 'task')
+				.slice(0, 3); // Limit to top 3 potential duplicates
+			console.log('Filtered semantic results:', semanticResults);
+			isSearching = false;
+			selectedSuggestionIndex = -1;
+		}, 5); // Get up to 5 results to filter from
 	}
 
-	// Watch for text changes to trigger suggestions
-	// $effect(() => {
-	// 	fullTextContent;
-	// 	updateSuggestions();
-	// });
+	// Watch for text changes to trigger duplicate detection
+	$effect(() => {
+		fullTextContent;
+		updateSuggestions();
+	});
 
-	// Accept a suggestion
-	// function acceptSuggestion(suggestion: Task) {
-	// 	// Clear current text chunks
-	// 	chunks = [chunk('')];
+	// Close suggestions when focus is lost
+	function handleBlur(event: FocusEvent) {
+		// Use setTimeout to allow time for suggestion clicks to register
+		// before closing the dropdown
+		setTimeout(() => {
+			const relatedTarget = event.relatedTarget as HTMLElement;
+			// Don't close if focus moved to a suggestion button or the dropdown itself
+			const dropdown = document.querySelector('.suggestions-dropdown');
+			if (relatedTarget && dropdown?.contains(relatedTarget)) {
+				return;
+			}
+			
+			showSuggestions = false;
+			semanticResults = [];
+			selectedSuggestionIndex = -1;
+			isSearching = false;
+		}, 150);
+	}
+
+	// Handle clicking on a duplicate suggestion
+	async function handleDuplicateAction(result: SearchResult) {
+		const task = result.item as Task;
 		
-	// 	// Set the suggestion text
-	// 	chunks[0].content = suggestion.name;
+		// Hide suggestions first
+		showSuggestions = false;
+		semanticResults = [];
+		selectedSuggestionIndex = -1;
+		isSearching = false;
 		
-	// 	// Hide suggestions
-	// 	showSuggestions = false;
-	// 	suggestions = [];
-	// 	selectedSuggestionIndex = -1;
-		
-	// 	// Focus back on input
-	// 	setTimeout(() => {
-	// 		if (taskInputElement?.firstElementChild) {
-	// 			(taskInputElement.firstElementChild as HTMLElement).focus();
-	// 			// Position cursor at end
-	// 			const selection = window.getSelection();
-	// 			const range = document.createRange();
-	// 			const textNode = taskInputElement.firstElementChild.firstChild || taskInputElement.firstElementChild;
-	// 			range.setStart(textNode, suggestion.name.length);
-	// 			range.collapse(true);
-	// 			selection?.removeAllRanges();
-	// 			selection?.addRange(range);
-	// 		}
-	// 	}, 0);
-	// }
+		if (task.archived) {
+			// Unarchive the task and clear input
+			try {
+				await updateTask(task.id!, { archived: false });
+				console.log(`Unarchived task: ${task.name}`);
+				
+				// Clear the input since we've reactivated an existing task
+				chunks = [chunk('')];
+				chunks[0].content = '';
+				
+				// Navigate to the unarchived task
+				await goto(`/tasks/${task.id}`);
+			} catch (error) {
+				console.error('Error unarchiving task:', error);
+				alert('Failed to unarchive task. Please try again.');
+			}
+		} else {
+			// Navigate to the existing active task
+			await goto(`/tasks/${task.id}`);
+		}
+	}
+
+	// Accept a suggestion (replace current text with suggested duplicate) - kept for keyboard navigation
+	function acceptSuggestion(result: SearchResult) {
+		// For keyboard navigation, just trigger the same action as clicking
+		handleDuplicateAction(result);
+	}
+
+	// Format similarity percentage
+	function formatSimilarity(similarity: number): string {
+		return Math.round(similarity * 100) + '%';
+	}
 
 	// Handle keyboard navigation for suggestions
 	function handleSuggestionNavigation(event: KeyboardEvent): boolean {
-		//if (!showSuggestions || suggestions.length === 0) return false;
+		if (!showSuggestions || semanticResults.length === 0) return false;
 
 		switch (event.key) {
 			case 'ArrowDown':
 				event.preventDefault();
-				// selectedSuggestionIndex = Math.min(selectedSuggestionIndex + 1, suggestions.length - 1);
-				selectedSuggestionIndex = selectedSuggestionIndex + 1;
-
+				selectedSuggestionIndex = Math.min(selectedSuggestionIndex + 1, semanticResults.length - 1);
 				return true;
-			
+
 			case 'ArrowUp':
 				event.preventDefault();
 				selectedSuggestionIndex = Math.max(selectedSuggestionIndex - 1, -1);
 				return true;
-			
+
 			case 'Enter':
 			case 'Tab':
-				//&& selectedSuggestionIndex < suggestions.length
-				if (selectedSuggestionIndex >= 0 ) {
+				if (selectedSuggestionIndex >= 0 && selectedSuggestionIndex < semanticResults.length) {
 					event.preventDefault();
-					//acceptSuggestion(suggestions[selectedSuggestionIndex]);
+					acceptSuggestion(semanticResults[selectedSuggestionIndex]);
 					return true;
 				}
 				break;
-			
+
 			case 'Escape':
 				event.preventDefault();
 				showSuggestions = false;
-				//suggestions = [];
+				semanticResults = [];
 				selectedSuggestionIndex = -1;
 				return true;
 		}
@@ -171,7 +206,6 @@
 	$inspect(currentNodeTextPosition).with(console.log);
 
 	function spliceOutChunk(i: number) {
-
 		updateCurrentNode();
 
 		let newFocus;
@@ -182,7 +216,7 @@
 			console.log('i=' + i + ' current node ndex ' + currentNodeIndex);
 			newFocus = i - 1;
 			newFocusOffset = chunks[i - 1].content.replace('<br>', '').length;
-			console.log("chunk content: " + chunks[i - 1].content);
+			console.log('chunk content: ' + chunks[i - 1].content);
 		}
 
 		chunks.splice(i, 1);
@@ -226,7 +260,7 @@
 	});
 
 	function isInTag(): boolean {
-		console.log("in tag");
+		console.log('in tag');
 		if (currentNode?.classList) return currentNode.classList.contains('tag-chip');
 		else return false;
 	}
@@ -245,8 +279,7 @@
 		const textBeforeCursor = nodeText?.substring(0, currentNodeTextPosition) || '';
 		let textAfterCursor = nodeText?.substring(currentNodeTextPosition || nodeText?.length);
 
-		if(textAfterCursor?.length === 0)
-			textAfterCursor = '&nbsp;';
+		if (textAfterCursor?.length === 0) textAfterCursor = '&nbsp;';
 
 		currentChunk.content = textBeforeCursor;
 		chunks.splice(currentNodeIndex + 1, 0, chunk(newChunkText + textAfterCursor));
@@ -278,11 +311,10 @@
 
 		updateCurrentNode();
 
-		console.log("current node: " + currentNode?.outerHTML);
+		console.log('current node: ' + currentNode?.outerHTML);
 
-		
-		if(!currentNode?.textContent?.trim() && e.code.length > 1) {
-			console.log("CURRENT CHUNK: " + currentChunk);
+		if (!currentNode?.textContent?.trim() && e.code.length > 1) {
+			console.log('CURRENT CHUNK: ' + currentChunk);
 			currentChunk.content = '';
 		}
 
@@ -322,63 +354,64 @@
 		// 	}, 0);
 
 		// 	return;
-		// } 
-		
+		// }
+
 		if (e.code === 'Backspace') {
 			// if(currentNode?.dataset && currentNode?.dataset.itemId) {
 			// 	(chunks[parseInt(currentNode.dataset.itemId)]).type() = 'text';
 			// }
 			//console.log("text elngth " + currentNode?.textContent);
 			if (!currentNode?.textContent) spliceOutChunk(currentNodeIndex);
-		}
-
-		else if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.code)) {
+		} else if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.code)) {
 			//claude code
 			const selection = window.getSelection();
-			const currentElement = selection?.anchorNode?.nodeType === 3 
-					? selection.anchorNode.parentElement 
-					: selection?.anchorNode as HTMLElement;
-			
+			const currentElement =
+				selection?.anchorNode?.nodeType === 3
+					? selection.anchorNode.parentElement
+					: (selection?.anchorNode as HTMLElement);
+
 			// Find current chunk index
 			const currentIndex = parseInt(currentElement?.dataset.itemId || '0');
 			const currentOffset = selection?.anchorOffset || 0;
 			const textLength = currentElement?.textContent?.length || 0;
-			
+
 			let shouldNavigate = false;
 			let targetIndex = currentIndex;
 			let targetPosition = 0;
-			
+
 			if (e.code === 'ArrowLeft' && currentOffset === 0) {
-					// At beginning of current chunk, go to previous
-					shouldNavigate = true;
-					targetIndex = Math.max(0, currentIndex - 1);
-					targetPosition = chunks[targetIndex]?.content?.length || 0; // End of previous chunk
+				// At beginning of current chunk, go to previous
+				shouldNavigate = true;
+				targetIndex = Math.max(0, currentIndex - 1);
+				targetPosition = chunks[targetIndex]?.content?.length || 0; // End of previous chunk
 			} else if (e.code === 'ArrowRight' && currentOffset === textLength) {
-					// At end of current chunk, go to next
-					shouldNavigate = true;
-					targetIndex = Math.min(chunks.length - 1, currentIndex + 1);
-					targetPosition = 0; // Beginning of next chunk
+				// At end of current chunk, go to next
+				shouldNavigate = true;
+				targetIndex = Math.min(chunks.length - 1, currentIndex + 1);
+				targetPosition = 0; // Beginning of next chunk
 			}
-			
+
 			if (shouldNavigate && targetIndex !== currentIndex) {
-					e.preventDefault();
-					
-					// Find the target element
-					const targetElement = document.querySelector(`[data-item-id="${targetIndex}"]`) as HTMLElement;
-					if (targetElement) {
-							targetElement.focus();
-							
-							// Set cursor position
-							if (targetElement.textContent) {
-									const range = document.createRange();
-									const textNode = targetElement.firstChild || targetElement;
-									range.setStart(textNode, Math.min(targetPosition, targetElement.textContent.length));
-									range.collapse(true);
-									
-									selection?.removeAllRanges();
-									selection?.addRange(range);
-							}
+				e.preventDefault();
+
+				// Find the target element
+				const targetElement = document.querySelector(
+					`[data-item-id="${targetIndex}"]`
+				) as HTMLElement;
+				if (targetElement) {
+					targetElement.focus();
+
+					// Set cursor position
+					if (targetElement.textContent) {
+						const range = document.createRange();
+						const textNode = targetElement.firstChild || targetElement;
+						range.setStart(textNode, Math.min(targetPosition, targetElement.textContent.length));
+						range.collapse(true);
+
+						selection?.removeAllRanges();
+						selection?.addRange(range);
 					}
+				}
 			}
 		}
 
@@ -400,16 +433,13 @@
 						(currentNode.nextElementSibling as HTMLElement).focus();
 						window.getSelection()?.setPosition(currentNode.nextElementSibling, 0);
 						//updateCurrentNode();
-						
+
 						updateCurrentNode();
 					}
 				}, 0);
-
 			}
 			return;
-		} 
-		
-		else if (e.code === 'Enter') {
+		} else if (e.code === 'Enter') {
 			//else if (event.data === 'Enter' && !event.shiftKey) {
 			// Regular Enter - submit
 			e.preventDefault();
@@ -417,7 +447,7 @@
 		}
 
 		//console.log('Cursor position after check: ', getCursorPosition());
-	}
+	};
 
 	const updateCurrentNode = () => {
 		// console.log("current node " + window.getSelection()?.anchorNode?.textContent);
@@ -429,10 +459,9 @@
 
 		const selection = window.getSelection();
 
-		if(selection) {
+		if (selection) {
 			// node type 3 is text
-			if (selection.anchorNode?.nodeType === 3)
-				currentNode = selection.anchorNode?.parentElement;
+			if (selection.anchorNode?.nodeType === 3) currentNode = selection.anchorNode?.parentElement;
 			// 1 is element
 			else if (selection.anchorNode?.nodeType === 1)
 				currentNode = window.getSelection()?.anchorNode as HTMLElement;
@@ -443,30 +472,25 @@
 					const rect = range.getBoundingClientRect();
 					moveToClosestChild(rect.x, rect.y);
 				}
-			}
-			else {
-				if (selection.anchorOffset)
-					currentNodeTextPosition = window.getSelection()?.anchorOffset;
+			} else {
+				if (selection.anchorOffset) currentNodeTextPosition = window.getSelection()?.anchorOffset;
 			}
 		}
-	}
+	};
 
 	// Handle keyboard events
 	const handleInput = (event: Event) => {
 		console.log('HANDLE INPUT');
 
 		console.log('updateCurrentNode exists?', typeof updateCurrentNode); // Should log "function"
-    
 
 		let e = event as InputEvent;
 
-		
 		console.log('INPUT: ' + e.data);
 
 		updateCurrentNode();
 
-		console.log("current node: " + currentNode?.outerHTML);
-
+		console.log('current node: ' + currentNode?.outerHTML);
 
 		if (e.data === '#' || e.data === '/') {
 			event.preventDefault();
@@ -504,9 +528,7 @@
 			}, 0);
 
 			return;
-		} 
-		
-		else if (e.data === 'Backspace') {
+		} else if (e.data === 'Backspace') {
 			// if(currentNode?.dataset && currentNode?.dataset.itemId) {
 			// 	(chunks[parseInt(currentNode.dataset.itemId)]).type() = 'text';
 			// }
@@ -516,7 +538,7 @@
 
 		// Otherwise, if we're in a tag, handle escape characters
 		else if (isInTag()) {
-			if (e.data === 'Enter' || e.data === 'Tab' || e.data === 'Escape') {
+			if (e.data === 'Tab' || e.data === 'Escape') {
 				// If we're in a tag and hit an escape character, end the current tag
 				//insertCharacterAtCursor(SEPARATOR_SPACE);
 				event.preventDefault();
@@ -536,9 +558,7 @@
 				}, 0);
 			}
 			return;
-		} 
-		
-		else if (e.data === 'Enter') {
+		} else if (e.data === 'Enter') {
 			//else if (event.data === 'Enter' && !event.shiftKey) {
 			// Regular Enter - submit
 			event.preventDefault();
@@ -546,13 +566,12 @@
 		}
 
 		//console.log('Cursor position after check: ', getCursorPosition());
-	}
+	};
 
 	function handleOnclick(event: MouseEvent) {
 		console.log('this element is: ' + (event.target as HTMLElement).outerHTML);
 
-		console.log("click x: " + event.clientX + ", click y: " + event.clientY);
-
+		console.log('click x: ' + event.clientX + ', click y: ' + event.clientY);
 
 		// Don't do anything if user clicked on a child div
 		if ((event.target as HTMLElement) != taskInputElement) {
@@ -561,7 +580,6 @@
 		}
 
 		event.preventDefault();
-
 
 		moveToClosestChild(event.clientX, event.clientY);
 
@@ -683,26 +701,26 @@
 	}
 
 	function moveToClosestChild(x: number, y: number) {
-		if(taskInputElement) {
+		if (taskInputElement) {
 			let closestChild = findClosestChild(
 				x,
 				y,
 				Array.from(taskInputElement.children) as HTMLElement[]
 			);
 
-			console.log("closest child: " + closestChild.outerHTML);
+			console.log('closest child: ' + closestChild.outerHTML);
 
 			// Create synthetic click event for the child
 			const childRect = closestChild.getBoundingClientRect();
 
 			// Keep coordinates that are within bounds, clamp others
 			const clampedX =
-				x > (childRect.left + 1) && x < (childRect.right - 1)
+				x > childRect.left + 1 && x < childRect.right - 1
 					? x // Keep original if within bounds
 					: Math.max(childRect.left + 1, Math.min(childRect.right - 1, x)); // Clamp if outside
 
 			const clampedY =
-				y > (childRect.top + 1) && y < (childRect.bottom - 1)
+				y > childRect.top + 1 && y < childRect.bottom - 1
 					? y // Keep original if within bounds
 					: Math.max(childRect.top + 1, Math.min(childRect.bottom - 1, y)); // Clamp if outside
 
@@ -714,11 +732,12 @@
 			closestChild.focus();
 
 			// Use caretPositionFromPoint or caretRangeFromPoint
-			const position =
-				document.caretPositionFromPoint?.(clampedX, clampedY);
+			const position = document.caretPositionFromPoint?.(clampedX, clampedY);
 
 			if (position) {
-				console.log("position: " + position.getClientRect()?.x + ", " + position.getClientRect()?.y);
+				console.log(
+					'position: ' + position.getClientRect()?.x + ', ' + position.getClientRect()?.y
+				);
 				const selection = window.getSelection();
 				selection?.removeAllRanges();
 
@@ -765,11 +784,10 @@
 
 		// Hide suggestions after submit
 		showSuggestions = false;
-		//suggestions = [];
+		semanticResults = [];
 		selectedSuggestionIndex = -1;
+		isSearching = false;
 	}
-
-	
 </script>
 
 <svelte:document />
@@ -785,7 +803,7 @@
 		{#if taskTextEmpty()}
 			<div
 				class="textarea from-primary to-secondary pointer-events-none
-				absolute inset-0 bg-gradient-to-r bg-clip-text text-transparent flex align-text-bottom"
+				absolute inset-0 flex bg-gradient-to-r bg-clip-text align-text-bottom text-transparent"
 				style="z-index: 5; min-height: 4.25rem; padding: 1rem 1rem; word-wrap: break-word; 
 				overflow-wrap: break-word; white-space: pre-wrap; align-items: center; justify-content: flex-start;"
 			>
@@ -799,7 +817,10 @@
 			role="textbox"
 			tabindex="0"
 			onmousedown={handleOnclick}
-			onkeydown={() => { updateCurrentNode();  }}
+			onkeydown={() => {
+				updateCurrentNode();
+			}}
+			onblur={handleBlur}
 			class="textarea taskinput-textarea inset-0 flex flex-wrap"
 			style="min-height: 4.25rem; padding: 1rem 0.75rem; word-wrap: break-word; 
   		align-content: center;
@@ -816,35 +837,85 @@
 					transition:scale={{ duration: 50 }}
 					oninput={handleInput}
 					onkeydown={handleKeydown}
+					onblur={handleBlur}
 				></div>
-				
-					<!-- oninput={handleInput} -->
+
+				<!-- oninput={handleInput} -->
 			{/each}
 		</div>
 
-		<!-- Auto-suggest dropdown -->
+		<!-- Duplicate detection dropdown -->
 		{#if showSuggestions}
-		{#await suggestions}
-			Loading...
-		{:then suggestions}
-			<div 
-				class="absolute top-full left-0 right-0 bg-base-100 border border-base-300 rounded-lg shadow-lg mt-1 max-h-60 overflow-y-auto z-50"
+			<div
+				class="suggestions-dropdown bg-base-100 border-base-300 absolute top-full right-0 left-0 z-50 mt-1 max-h-60 overflow-y-auto rounded-lg border shadow-lg"
 				transition:fade={{ duration: 150 }}
 			>
-				{#each suggestions as suggestion, index}
-					<button
-						type="button"
-						class="w-full text-left px-4 py-2 hover:bg-base-200 border-b border-base-200 last:border-b-0 transition-colors duration-150"
-						class:bg-primary={selectedSuggestionIndex === index}
-						class:text-primary-content={selectedSuggestionIndex === index}
-					>
-						<!-- onclick={() => acceptSuggestion(suggestion)} -->
-						<div class="font-medium truncate">{suggestion.name}</div>
-						<div class="text-sm text-base-content/70 truncate">Similar task</div>
-					</button>
-				{/each}
+				{#if isSearching}
+					<div class="text-base-content/70 flex items-center justify-center p-4 text-sm">
+						<div class="loading loading-spinner loading-sm mr-2"></div>
+						Checking for duplicates...
+					</div>
+				{:else if semanticResults.length === 0}
+					<div class="text-base-content/70 p-4 text-center text-sm">
+						✅ No similar tasks found above threshold
+					</div>
+				{:else}
+					<div class="bg-warning/10 border-warning/20 border-b p-3">
+						<div class="text-warning font-medium text-sm flex items-center gap-2">
+							⚠️ Similar tasks found
+						</div>
+						<div class="text-base-content/70 text-xs mt-1">
+							Active tasks: click to view • Archived tasks: click to unarchive & view • Press Escape to continue
+						</div>
+					</div>
+					{#each semanticResults as result, index}
+						{@const task = result.item as Task}
+						<button
+							type="button"
+							onclick={() => handleDuplicateAction(result)}
+							class="hover:bg-base-200 focus:bg-base-200 flex w-full items-center gap-3 border-b border-base-200 p-3 text-left transition-colors duration-150 last:border-b-0 focus:outline-none"
+							class:bg-primary={selectedSuggestionIndex === index}
+							class:text-primary-content={selectedSuggestionIndex === index}
+						>
+							<div class="flex-shrink-0">
+								{#if task.archived}
+									<Archive class="text-orange-500 h-4 w-4" />
+								{:else}
+									<CheckSquare class="text-primary h-4 w-4" />
+								{/if}
+							</div>
+							<div class="min-w-0 flex-1">
+								<div class="truncate font-medium flex items-center gap-2">
+									{result.item.name}
+									{#if task.archived}
+										<span class="text-orange-500 text-xs px-2 py-0.5 bg-orange-100 dark:bg-orange-900/20 rounded-full">
+											Archived
+										</span>
+									{/if}
+								</div>
+								<div class="text-base-content/60 flex items-center gap-2 text-xs">
+									<span>{formatSimilarity(result.similarity)} match</span>
+									<span class="separator">•</span>
+									{#if task.archived}
+										<span class="text-orange-600 dark:text-orange-400">Click to unarchive & view</span>
+									{:else}
+										<span class="text-blue-600 dark:text-blue-400">Click to view task</span>
+									{/if}
+								</div>
+							</div>
+							<div class="flex-shrink-0 flex items-center gap-2">
+								<div class="bg-base-300 h-2 w-12 rounded-full">
+									<div
+										class="from-warning to-error h-full rounded-full bg-gradient-to-r"
+										style="width: {result.similarity * 100}%"
+									></div>
+								</div>
+								<ExternalLink class="h-3 w-3 text-base-content/40" />
+							</div>
+						</button>
+					{/each}
+				{/if}
 			</div>
-		{/await}
 		{/if}
 	</div>
 

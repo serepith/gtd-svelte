@@ -56,14 +56,10 @@ export class DataManager {
 	user: User | null = $state(null);
 
 	nodesCollection = $derived(
-		this.user?.uid && this.db
-			? collection(this.db, 'users', this.user?.uid, 'nodes')
-			: null
+		this.user?.uid && this.db ? collection(this.db, 'users', this.user?.uid, 'nodes') : null
 	);
 	junctionsCollection = $derived(
-		this.user && this.db
-			? collection(this.db, 'users', this.user?.uid, 'junctions')
-			: null
+		this.user && this.db ? collection(this.db, 'users', this.user?.uid, 'junctions') : null
 	);
 
 	nodes: GraphNode[] = $state([]);
@@ -82,10 +78,10 @@ export class DataManager {
 	tasks = $derived(this.nodes.filter((node) => node.type === 'task'));
 
 	// constructor() {
-  //   this.initFirebase();
-  // }
-  
-  initFirebase() {
+	//   this.initFirebase();
+	// }
+
+	initFirebase() {
 		console.log('Initializing Firebase...');
 
 		if (firebase.apps.length === 0) {
@@ -93,8 +89,7 @@ export class DataManager {
 			this.app = initializeApp(this.firebaseConfig);
 			this.db = getFirestore(this.app);
 			this.auth = getAuth(this.app);
-		}
-		else {
+		} else {
 			this.app = firebase.app();
 			this.db = getFirestore(this.app);
 			this.auth = getAuth(this.app);
@@ -128,8 +123,10 @@ export class DataManager {
 						this.nodesCollection.withConverter(taskConverter),
 						(snapshot) => {
 							this.nodes = snapshot.docs.map((doc) => {
+								//console.log("LISTENER FIRED ON " + doc.data().name);
 								return doc.data() as Task; // Adjust type as needed
 							});
+							console.log('this.nodes: ' + this.nodes);
 						},
 						(error) => {
 							console.error('Error fetching nodes:', error);
@@ -155,9 +152,8 @@ export class DataManager {
 			console.log('Firebase Auth initialized');
 			console.log('Current user:', this.user);
 
-
 			// TODO clean this shit up
-			getAllNodes().then((n) => this.nodes = n);
+			getAllNodes().then((n) => (this.nodes = n));
 		} else {
 			console.error('Firebase Auth not initialized');
 			console.log(this.auth);
@@ -166,7 +162,6 @@ export class DataManager {
 }
 
 export const data = new DataManager();
-
 
 // if(firebase.apps.length === 0)
 
@@ -245,7 +240,7 @@ const firebaseConfig = {
 
 const taskConverter: FirestoreDataConverter<Task> = {
 	toFirestore: (node: Task): DocumentData => {
-		return {
+		const doc: DocumentData = {
 			name: node.name,
 			createdAt: node.createdAt,
 			updatedAt: node.updatedAt,
@@ -253,10 +248,26 @@ const taskConverter: FirestoreDataConverter<Task> = {
 			archived: node.archived,
 			type: node.type
 		};
+
+		if (node.embedding) {
+			doc.embedding = node.embedding;
+		}
+		if (node.embeddingModelVersion) {
+			doc.embeddingModelVersion = node.embeddingModelVersion;
+		}
+
+		return doc;
 	},
 	fromFirestore: (snapshot: QueryDocumentSnapshot, options: SnapshotOptions): Task => {
 		const data = snapshot.data(options);
-		console.log(data);
+		// console.log('🔄 Loading task from Firestore:', {
+		// 	name: data.name,
+		// 	hasEmbedding: !!data.embedding,
+		// 	embeddingLength: data.embedding?.length,
+		// 	embeddingType: typeof data.embedding,
+		// 	hasModelVersion: !!data.embeddingModelVersion,
+		// 	modelVersion: data.embeddingModelVersion
+		// });
 		return {
 			id: snapshot.id,
 			name: data.name,
@@ -264,28 +275,49 @@ const taskConverter: FirestoreDataConverter<Task> = {
 			updatedAt: data.updatedAt,
 			completed: data.completed || false,
 			archived: data.archived || false,
-			type: data.type
+			type: data.type,
+			embedding: data.embedding,
+			embeddingModelVersion: data.embeddingModelVersion
 		};
 	}
 };
 
 const tagConverter: FirestoreDataConverter<Tag> = {
 	toFirestore: (tag: Tag): DocumentData => {
-		return {
+		const doc: DocumentData = {
 			name: tag.name,
 			createdAt: tag.createdAt,
 			updatedAt: tag.updatedAt,
 			type: tag.type
 		};
+
+		if (tag.embedding) {
+			doc.embedding = tag.embedding;
+		}
+		if (tag.embeddingModelVersion) {
+			doc.embeddingModelVersion = tag.embeddingModelVersion;
+		}
+
+		return doc;
 	},
 	fromFirestore: (snapshot: QueryDocumentSnapshot, options: SnapshotOptions): Tag => {
 		const data = snapshot.data(options);
+		// console.log('🔄 Loading tag from Firestore:', {
+		// 	name: data.name,
+		// 	hasEmbedding: !!data.embedding,
+		// 	embeddingLength: data.embedding?.length,
+		// 	embeddingType: typeof data.embedding,
+		// 	hasModelVersion: !!data.embeddingModelVersion,
+		// 	modelVersion: data.embeddingModelVersion
+		// });
 		return {
 			id: snapshot.id,
 			name: data.name,
 			createdAt: data.createdAt,
 			updatedAt: data.updatedAt,
-			type: data.type
+			type: data.type,
+			embedding: data.embedding,
+			embeddingModelVersion: data.embeddingModelVersion
 		} as Tag;
 	}
 };
@@ -323,23 +355,68 @@ const junctionConverter: FirestoreDataConverter<Junction> = {
 
 // TODO implement this
 const graphNodeConverter: FirestoreDataConverter<GraphNode> = {
-	toFirestore: (tag: Tag): DocumentData => {
-		return {
-			name: tag.name,
-			createdAt: tag.createdAt,
-			updatedAt: tag.updatedAt,
-			type: tag.type
+	toFirestore: (node: GraphNode): DocumentData => {
+		const doc: DocumentData = {
+			name: node.name,
+			createdAt: node.createdAt,
+			updatedAt: node.updatedAt,
+			type: node.type
 		};
+		
+		// Add task-specific fields if it's a task
+		if (node.type === 'task') {
+			const task = node as Task;
+			doc.completed = task.completed;
+			doc.archived = task.archived;
+		}
+		
+		// Add embedding fields if present
+		if (node.embedding) {
+			doc.embedding = node.embedding;
+		}
+		if (node.embeddingModelVersion) {
+			doc.embeddingModelVersion = node.embeddingModelVersion;
+		}
+		
+		return doc;
 	},
-	fromFirestore: (snapshot: QueryDocumentSnapshot, options: SnapshotOptions): Tag => {
+	fromFirestore: (snapshot: QueryDocumentSnapshot, options: SnapshotOptions): GraphNode => {
 		const data = snapshot.data(options);
-		return {
+		console.log('🔄 Loading GraphNode from Firestore:', {
+			name: data.name,
+			type: data.type,
+			hasEmbedding: !!data.embedding,
+			embeddingLength: data.embedding?.length,
+			embeddingType: typeof data.embedding,
+			hasModelVersion: !!data.embeddingModelVersion,
+			modelVersion: data.embeddingModelVersion
+		});
+		
+		// Create base node structure
+		const baseNode = {
 			id: snapshot.id,
 			name: data.name,
 			createdAt: data.createdAt,
 			updatedAt: data.updatedAt,
-			type: data.type
+			type: data.type,
+			embedding: data.embedding,
+			embeddingModelVersion: data.embeddingModelVersion
 		};
+		
+		// Return appropriate type based on node type
+		if (data.type === 'task') {
+			return {
+				...baseNode,
+				type: 'task',
+				completed: data.completed || false,
+				archived: data.archived || false
+			} as Task;
+		} else {
+			return {
+				...baseNode,
+				type: 'tag'
+			} as Tag;
+		}
 	}
 };
 

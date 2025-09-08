@@ -1,16 +1,19 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { onMount } from 'svelte';
-	import { getTagsForTask, updateTask } from '$lib/database';
-	//import { collections } from '$lib/globalState.svelte';
-	import Save from '@lucide/svelte/icons/save';
+	import { onMount, onDestroy } from 'svelte';
+	import { addTagToTask, getRelations, getTagsForTask, updateTask, getAllTags } from '$lib/database';
 	import X from '@lucide/svelte/icons/x';
-	import Plus from '@lucide/svelte/icons/plus';
-	import Calendar from '@lucide/svelte/icons/calendar';
+	import ChevronUp from '@lucide/svelte/icons/chevron-up';
+	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import AnimatedIcon from '$lib/icons/AnimatedIcon.svelte';
-	import { Timestamp } from 'firebase/firestore';
-	import { data } from '$lib/globalState.svelte';
+	import NodeTable from '$lib/components/NodeTable.svelte';
+	import { getDocsFromCache, Timestamp } from 'firebase/firestore';
+	import { data, graphNodeConverter } from '$lib/globalState.svelte';
+	import { createDebouncedSearch } from '$lib/semanticSearch';
+	import type { SearchResult } from '$lib/embeddings';
+	import { fade, scale } from 'svelte/transition';
+	import RelationsDisplay from '$lib/components/RelationsDisplay.svelte';
 
 	// Get the task ID from the URL parameter
 	let taskId = $page.params.slug;
@@ -24,10 +27,15 @@
 	let editedTaskName = $state('');
 	let editedCompleted = $state(false);
 	let editedArchived = $state(false);
+	
+	// Autosave state
+	let saveTimeout: ReturnType<typeof setTimeout> | undefined;
+	let isSaving = $state(false);
+	let lastSaved = $state<Date | null>(null);
 
-	// Task tags
-	let taskTagsPromise: Promise<Tag[]> = $state(getTagsForTask(taskId));
-	let taskTags: Tag[] = $state([]);
+	// Task relationships
+	let parentNodes: (Task | Tag)[] = $state([]);
+	let childNodes: (Task | Tag)[] = $state([]);
 
 	// Initialize editable fields when task is loaded
 	$effect(() => {
@@ -38,50 +46,86 @@
 		}
 	});
 
+	// TODO streamline this
 	onMount(async () => {
 		try {
-			taskTags = await taskTagsPromise;
+			parentNodes = await getRelations(taskId, 'parent');
+			childNodes = await getRelations(taskId, 'child');
+			
+			console.log("RELATIONS FOUND: " + parentNodes);
+
+			//taskTags = await getTagsForTask(taskId);
+			
+			// Combine child nodes (child tasks and child tags)
+			// childNodes = [...childTasksData, ...childTagsData];
 		} catch (error) {
-			console.error('Error loading task tags:', error);
-			taskTags = [];
+			console.error('Error loading task relationships:', error);
+			//taskTags = [];
+			parentNodes = [];
+			childNodes = [];
 		}
 	});
 
-	function handleSave() {
+
+	// Cleanup timeout on component destroy
+	onDestroy(() => {
+		if (saveTimeout) {
+			clearTimeout(saveTimeout);
+		}
+	});
+
+	// Autosave function with debouncing
+	async function autoSave() {
 		if (!task) return;
 
-		console.log('Saving task changes:', {
+		console.log('Autosaving task changes:', {
 			name: editedTaskName,
 			completed: editedCompleted,
 			archived: editedArchived
 		});
 
-		updateTask(task.id || '', {
-			name: editedTaskName,
-			completed: editedCompleted,
-			archived: editedArchived
-		});
-
-		goto('/tasks');
+		isSaving = true;
+		try {
+			await updateTask(task.id || '', {
+				name: editedTaskName,
+				completed: editedCompleted,
+				archived: editedArchived
+			});
+			lastSaved = new Date();
+		} catch (error) {
+			console.error('Failed to autosave task:', error);
+		} finally {
+			isSaving = false;
+		}
 	}
 
-	function handleCancel() {
-		goto('/tasks');
-	}
+	// Debounced autosave effect for task name (text input)
+	$effect(() => {
+		if (!task || editedTaskName === task.name) return;
+		
+		// Clear existing timeout
+		if (saveTimeout) {
+			clearTimeout(saveTimeout);
+		}
+		
+		// Set new timeout for debounced save
+		saveTimeout = setTimeout(() => {
+			autoSave();
+		}, 1000); // 1 second debounce for text input
+	});
 
-	function handleTagClick(tag: Tag) {
-		goto(`/tags/${tag.name}`);
-	}
+	// autosave effect for boolean fields (completed/archived)
+	$effect(() => {
+		if (!task) return;
+		
+		// Only save if the values have actually changed from the original task
+		const hasChanges = editedCompleted !== task.completed || editedArchived !== task.archived;
+		
+		if (hasChanges) {
+			autoSave();
+		}
+	});
 
-	function addTag() {
-		console.log('Add tag to task');
-		// TODO: Implement add tag logic
-	}
-
-	function removeTag(tagId: string) {
-		console.log('Remove tag from task:', tagId);
-		// TODO: Implement remove tag logic
-	}
 
 	function formatDate(timestamp: Timestamp) {
 		return timestamp.toDate().toLocaleDateString('en-US', {
@@ -96,126 +140,94 @@
 </script>
 
 <svelte:head>
-	<title>Edit Task - {task?.name || 'Loading...'}</title>
+	<title>Task - {task?.name || 'Loading...'}</title>
 </svelte:head>
 
 {#if !task}
 	<section class="p-4">
-		<div class="mx-auto max-w-4xl">
+		<div class="mx-auto max-w-6xl">
 			<div class="py-12 text-center">
 				<div class="loading loading-spinner loading-lg mx-auto"></div>
 				<p class="text-base-content/70 mt-4">Loading task...</p>
 			</div>
 		</div>
 	</section>
-{:else}
-	<section class="p-4">
-		<div class="mx-auto max-w-4xl">
+{:else if task.id}
+	<section class="flex p-4 justify-center self-center-safe">
+		<div class="flex mx-auto max-w-6xl justify-center">
 			<!-- Header -->
 			<div class="mb-6 flex items-center justify-between">
-				<h1 class="text-3xl font-bold">Edit Task</h1>
-				<div class="flex gap-2">
-					<button class="btn btn-outline" onclick={handleCancel}>
-						<X size={16} />
-						Cancel
-					</button>
-					<button class="btn btn-primary" onclick={handleSave}>
-						<Save size={16} />
-						Save Changes
-					</button>
+				<div class="flex items-center gap-4">
+					{#if isSaving}
+						<div class="flex items-center gap-2 text-sm text-base-content/70">
+							<div class="loading loading-spinner loading-xs"></div>
+							Saving...
+						</div>
+					{:else if lastSaved}
+						<div class="text-sm text-base-content/70">
+							Saved {lastSaved.toLocaleTimeString()}
+						</div>
+					{/if}
 				</div>
 			</div>
+			
+			<div class="task-details-panel bg-base-200 rounded-box mb-6 shadow-md">
+				<div class="flex flex-col p-6 gap-3 justify-center">
 
-			<!-- Task Properties -->
-			<div class="properties-panel bg-base-200 rounded-box mb-6 shadow-md">
-				<div class="p-6">
+					<!-- Parents Section -->
+					<RelationsDisplay nodes={parentNodes} taskId={task.id} />
+
+					<!-- Task Details Section -->
 					<div class="form-control">
-						<div class="flex items-center gap-3">
+						<div class="flex justify-center gap-3">
 							<input
 								type="text"
-								class="input input-bordered flex-1"
+								class="input text-lg font-medium"
 								bind:value={editedTaskName}
 								placeholder="Enter task name"
 							/>
-							<div class="flex items-center gap-1">
-								<span class="text-base-content/70 text-sm">Complete</span>
-								<AnimatedIcon
-									iconType="complete"
-									buttonType="action"
-									bind:selected={editedCompleted}
-								/>
-							</div>
-							<div class="flex items-center gap-1">
-								<span class="text-base-content/70 text-sm">Archive</span>
-								<AnimatedIcon
-									iconType="archive"
-									buttonType="action"
-									bind:selected={editedArchived}
-								/>
-							</div>
-						</div>
-					</div>
-				</div>
-
-				<div class="p-6">
-					<h2 class="mb-4 text-xl font-semibold">Associated Tags</h2>
-					<div class="tags-container bg-base-300 min-h-20 rounded-lg p-4">
-						<div class="flex flex-wrap gap-3">
-							{#each taskTags as tag (tag.id)}
-								<div class="removable-tag relative">
-									<button class="tag-chip clickable-tag" onclick={() => handleTagClick(tag)}>
-										#{tag.name}
-									</button>
-									<button
-										class="remove-tag-button bg-error hover:bg-error/80 text-error-content absolute -top-2 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full text-xs font-bold transition-all duration-200"
-										onclick={() => removeTag(tag.id || '')}
-										title="Remove tag"
-									>
-										×
-									</button>
+							<div class="flex items-center gap-3">
+								<div class="flex items-center gap-1">
+									<!-- <span class="text-base-content/70 text-sm">Complete</span> -->
+									<AnimatedIcon
+										iconType="complete"
+										buttonType="action"
+										bind:selected={editedCompleted}
+									/>
 								</div>
-							{/each}
-							<!-- Ghost "Add Tag" chip -->
-							<button class="tag-chip add-tag-chip" onclick={addTag} title="Add a new tag">
-								add tag ＋
-							</button>
+								<div class="flex items-center gap-1">
+									<!-- <span class="text-base-content/70 text-sm">Archive</span> -->
+									<AnimatedIcon
+										iconType="archive"
+										buttonType="action"
+										bind:selected={editedArchived}
+									/>
+								</div>
+							</div>
 						</div>
 					</div>
-				</div>
-			</div>
 
-			<!-- Task Metadata -->
-			<div class="metadata-panel bg-base-200 rounded-box shadow-md">
-				<div class="p-4">
-					<h2 class="flex items-center gap-2 text-xl font-semibold">
-						<Calendar size={20} />
-						Task Information
-					</h2>
+					<!-- Child Section -->
+
+					<RelationsDisplay nodes={childNodes} taskId={task.id} />
+
 				</div>
 
-				<div class="p-6">
-					<div class="grid grid-cols-1 gap-6 text-sm md:grid-cols-2">
+				<!-- Metadata Section -->
+				<div class="px-6 pb-6">
+					<div class="grid grid-cols-1 gap-4 text-sm md:grid-cols-3">
 						<div>
 							<span class="label-text font-medium">Created</span>
 							<p class="text-base-content/70 mt-1">
 								{formatDate(task.createdAt)}
 							</p>
 						</div>
-
 						<div>
 							<span class="label-text font-medium">Last Updated</span>
 							<p class="text-base-content/70 mt-1">
 								{formatDate(task.updatedAt)}
 							</p>
 						</div>
-
-						<div>
-							<span class="label-text font-medium">Task ID</span>
-							<p class="text-base-content/70 mt-1 font-mono text-xs">
-								{task.id}
-							</p>
-						</div>
-
 						<div>
 							<span class="label-text font-medium">Status</span>
 							<div class="mt-1 flex gap-2">
@@ -233,66 +245,21 @@
 					</div>
 				</div>
 			</div>
+
+		</div>
+	</section>
+{:else}
+	<section class="p-4">
+		<div class="mx-auto max-w-6xl">
+			<div class="py-12 text-center">
+				<p class="text-base-content/70 mt-4">Error: no task id found!</p>
+			</div>
 		</div>
 	</section>
 {/if}
 
 <style>
-	.tag-chip {
-		background-color: var(--color-primary);
-		color: var(--color-primary-content);
-		padding: 0.25rem 0.75rem;
-		border-radius: 9999px;
-		font-size: 0.875rem;
-		font-weight: 500;
-		border: 1px solid var(--color-base-content);
-		cursor: default;
-		transition: all 0.2s ease;
-	}
-
-	.clickable-tag {
-		cursor: pointer !important;
-	}
-
-	.clickable-tag:hover {
-		background-color: rgb(from var(--color-info) r g b / 0.2);
-		color: var(--color-info);
-		border: 1px solid var(--color-info);
-		transform: scale(1.05);
-	}
-
-	.properties-panel,
-	.metadata-panel {
-		transition: all 0.2s ease;
-	}
-
-	.add-tag-chip {
-		background-color: transparent;
-		color: var(--color-base-content);
-		border: 1px dashed var(--color-base-content);
-		opacity: 0.5;
-	}
-
-	.add-tag-chip:hover {
-		background-color: var(--color-primary);
-		color: var(--color-primary-content);
-		border-color: var(--color-primary);
-		opacity: 1;
-		transform: scale(1.05);
-	}
-
-	/* Make entire removable tag container transparent when hovering over remove button */
-	.removable-tag:has(.remove-tag-button:hover) {
-		opacity: 0.3;
-		transform: scale(0.95);
-	}
-
-	.removable-tag {
-		transition: all 0.2s ease;
-	}
-
-	.tags-container {
-		min-height: 5rem;
+	.task-details-panel {
 		transition: all 0.2s ease;
 	}
 </style>

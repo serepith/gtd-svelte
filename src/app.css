@@ -3,7 +3,7 @@
 @plugin '@tailwindcss/forms';
 @plugin "daisyui" {
 	themes:
-		coffee --default,
+		forest --default,
 		dark --prefersdark;
 }
 
@@ -159,6 +159,17 @@ button:focus:not(:focus-visible) {
 	align-items: center;
 	line-height: 1.2;
 }
+
+	.clickable-tag {
+		cursor: pointer !important;
+	}
+
+	.clickable-tag:hover {
+		background-color: rgb(from var(--color-info) r g b / 0.2);
+		color: var(--color-info);
+		border: 1px solid var(--color-info);
+		transform: scale(1.05);
+	}
 
 /* Mobile-specific styling for better visibility */
 /* @media (max-width: 768px) {
